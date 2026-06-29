@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AreaChart, Legend, Title } from "@tremor/react";
+import {
+  AreaChart as RechartsAreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { Title } from "@tremor/react";
 
 type FixedChartRow = {
   annee: string;
@@ -155,29 +164,52 @@ export default function FixedReturnSimulation() {
             pour un capital final de <span className="text-sidebar-primary">{formatEuros(result.capitalFinal)}€</span>
           </Title>
 
-          <AreaChart
-            className="mt-10 h-96"
-            data={result.chartData}
-            index="annee"
-            categories={["patrimoine initial", "versements", "intérêts"]}
-            colors={["red", "violet", "amber"]}
-            valueFormatter={dataFormatter}
-            startEndOnly
-            showAnimation
-            showTooltip
-            showLegend={false}
-            showGridLines
-            showGradient={false}
-            autoMinValue
-            showYAxis
-            stack
-          />
+          <ResponsiveContainer width="100%" height={300}>
+            <RechartsAreaChart
+              data={result.chartData}
+              margin={{ top: 10, right: 30, left: 50, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="colorInitial" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#d6475d" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#d6475d" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorVersements" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorInterets" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="annee" stroke="#888888" />
+              <YAxis stroke="#888888" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#444444" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid #444" }}
+                formatter={(value) => typeof value === "number" ? dataFormatter(value) : value}
+              />
+              <Area type="monotone" dataKey="patrimoine initial" stroke="#d6475d" fillOpacity={1} fill="url(#colorInitial)" />
+              <Area type="monotone" dataKey="versements" stroke="#a78bfa" fillOpacity={1} fill="url(#colorVersements)" />
+              <Area type="monotone" dataKey="intérêts" stroke="#fbbf24" fillOpacity={1} fill="url(#colorInterets)" />
+            </RechartsAreaChart>
+          </ResponsiveContainer>
 
-          <Legend
-            className="mt-2 flex flex-row justify-evenly"
-            categories={["patrimoine initial", "versements", "intérêts"]}
-            colors={["red", "violet", "amber"]}
-          />
+          <div className="mt-2 flex flex-row justify-evenly text-sm">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4" style={{ backgroundColor: "#d6475d" }}></div>
+              <span>patrimoine initial</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4" style={{ backgroundColor: "#a78bfa" }}></div>
+              <span>versements</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4" style={{ backgroundColor: "#fbbf24" }}></div>
+              <span>intérêts</span>
+            </div>
+          </div>
 
           <Title className="mt-10 text-center text-xl text-foreground">
             Celui-ci se compose de <span className="text-sidebar-primary">{formatEuros(patrimoineInitial)}€</span>
