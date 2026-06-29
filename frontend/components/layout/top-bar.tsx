@@ -1,4 +1,3 @@
-// components/layout/top-bar.tsx
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 
