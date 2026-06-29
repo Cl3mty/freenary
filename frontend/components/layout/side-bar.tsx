@@ -6,7 +6,6 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  PieChart,
   LineChart,
   Wallet,
   TrendingUp,
@@ -20,7 +19,6 @@ import {
   PiggyBank,
   Landmark,
   HelpCircle,
-  Pen,
   NotebookPen,
   Flame,
   Rocket,
