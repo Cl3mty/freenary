@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -58,6 +59,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import logoXL from "@/assets/images/logo-xl.png";
 
 const portfolioItems = [
   { title: "Actions & Fonds", url: "/portfolio/stocks-funds", icon: LineChart },
@@ -101,10 +103,15 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Freenary">
               <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold">
-                  F
+                <div className="flex aspect-square size-10 items-center justify-center overflow-hidden rounded-lg bg-transparent">
+                  <Image
+                    src={logoXL}
+                    alt="Freenary logo"
+                    className="size-9 object-contain"
+                    priority
+                  />
                 </div>
-                <span className="text-base font-semibold tracking-wide">
+                <span className="text-4xl font-semibold tracking-wide text-sidebar-primary group-data-[collapsible=icon]:hidden">
                   Freenary
                 </span>
               </Link>
