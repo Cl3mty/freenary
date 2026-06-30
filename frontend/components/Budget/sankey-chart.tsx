@@ -1,37 +1,36 @@
 "use client";
 
+import React, { Component } from "react";
 import {
-  Sankey,
-  Tooltip,
-  ResponsiveContainer,
   Layer,
   Rectangle,
+  ResponsiveContainer,
+  Sankey,
   Text,
-  SankeyNode as RechartsSankeyNode,
+  Tooltip,
 } from "recharts";
-import React, { Component } from "react";
 
-interface SankeyNode {
+type SankeyNode = {
   name: string;
   value: number;
-}
+};
 
-interface SankeyLink {
+type SankeyLink = {
   source: number;
   target: number;
   value: number;
-}
+};
 
-interface SankeyChartProps {
+type SankeyChartProps = {
   data: {
     nodes: SankeyNode[];
     links: SankeyLink[];
   };
   nodeColors: string[];
   linkColors: string[];
-}
+};
 
-class CustomNode extends React.Component<any> {
+class CustomNode extends Component<any> {
   render() {
     const {
       x,
@@ -45,7 +44,6 @@ class CustomNode extends React.Component<any> {
     } = this.props;
 
     const isOut = x + width + 6 > containerWidth;
-    const offset = 5;
 
     return (
       <Layer key={`CustomNode${index}`}>
@@ -61,12 +59,11 @@ class CustomNode extends React.Component<any> {
         <Text
           textAnchor={isOut ? "end" : "start"}
           x={isOut ? x - 6 : x + width + 6}
-          y={y + offset + height / 2}
+          y={y + height / 2 + 5}
           fontSize={14}
-          fontStyle="normal"
           fill="#ffffff"
         >
-          {`${payload.name} : ${payload.value} €`}
+          {`${payload.name} : ${Math.round(payload.value)} €`}
         </Text>
       </Layer>
     );
@@ -88,7 +85,7 @@ class CustomLink extends Component<any> {
     } = this.props;
 
     const margin = 5;
-    const width = linkWidth - margin;
+    const width = Math.max(linkWidth - margin, 1);
 
     return (
       <Layer key={`CustomLink${index}`}>
@@ -105,7 +102,7 @@ class CustomLink extends Component<any> {
             Z
           `}
           fill={colors[index % colors.length]}
-          opacity={0.4}
+          opacity={0.45}
           strokeWidth={0}
         />
       </Layer>
@@ -113,13 +110,9 @@ class CustomLink extends Component<any> {
   }
 }
 
-export default function SankeyChart({
-  data,
-  nodeColors,
-  linkColors,
-}: SankeyChartProps) {
+export default function SankeyChart({ data, nodeColors, linkColors }: SankeyChartProps) {
   return (
-    <ResponsiveContainer width="100%" height={550}>
+    <ResponsiveContainer width="100%" height={560}>
       <Sankey
         data={data}
         sort={false}
@@ -127,13 +120,8 @@ export default function SankeyChart({
         nodeWidth={8}
         linkCurvature={0.6}
         iterations={0}
-        margin={{
-          left: 5,
-          right: 5,
-          top: 5,
-          bottom: 5,
-        }}
-        node={<CustomNode containerWidth={960} colors={nodeColors} />}
+        margin={{ left: 5, right: 5, top: 5, bottom: 5 }}
+        node={<CustomNode containerWidth={1100} colors={nodeColors} />}
         link={<CustomLink colors={linkColors} />}
       >
         <Tooltip />
