@@ -58,19 +58,26 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import logoXL from "@/assets/images/logo-xl.png";
 
-const portfolioItems = [
-  { title: "Actions & Fonds", url: "/portfolio/stocks-funds", icon: LineChart },
-  { title: "Startups & PME", url: "/portfolio/private-equity", icon: Rocket },
-  { title: "Immobilier", url: "/portfolio/real-estate", icon: Building2 },
-  { title: "Crypto", url: "/portfolio/crypto", icon: Bitcoin },
-  { title: "Métaux précieux", url: "/portfolio/precious-metals", icon: Coins },
-  { title: "Épargne", url: "/portfolio/savings-accounts", icon: PiggyBank },
-  { title: "Autres", url: "/portfolio/other-assets", icon: HelpCircle },
+type SidebarEntry = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  settingKeys: string[];
+};
+
+const portfolioItems: SidebarEntry[] = [
+  { title: "Actions & Fonds", url: "/portfolio/stocks-funds", icon: LineChart, settingKeys: ["Actions & Fonds"] },
+  { title: "Startups & PME", url: "/portfolio/private-equity", icon: Rocket, settingKeys: ["Startups & PME"] },
+  { title: "Immobilier", url: "/portfolio/real-estate", icon: Building2, settingKeys: ["Immobilier"] },
+  { title: "Crypto", url: "/portfolio/crypto", icon: Bitcoin, settingKeys: ["Crypto"] },
+  { title: "Métaux précieux", url: "/portfolio/precious-metals", icon: Coins, settingKeys: ["Métaux precieux", "Metaux precieux"] },
+  { title: "Épargne", url: "/portfolio/savings-accounts", icon: PiggyBank, settingKeys: ["Epargne", "Épargne", "Eargne", "Éargne"] },
+  { title: "Autres", url: "/portfolio/other-assets", icon: HelpCircle, settingKeys: ["Autres"] },
 ];
 
-const debtsItems = [
-  { title: "Emprunts", url: "/debts/loans", icon: Landmark },
-  { title: "Prêts immobiliers", url: "/debts/morgages", icon: Building2 },
+const debtsItems: SidebarEntry[] = [
+  { title: "Emprunts", url: "/debts/loans", icon: Landmark, settingKeys: ["Emprunts"] },
+  { title: "Prêts immobiliers", url: "/debts/morgages", icon: Building2, settingKeys: ["Prêts immobiliers", "Prets immobiliers"] },
 ];
 
 // Placeholder en attendant l'auth locale offline
@@ -89,9 +96,68 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+function normalizeLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { isMobile, state } = useSidebar();
+  const [activeTabs, setActiveTabs] = React.useState<string[] | null>(null);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    async function loadSettingsTabs() {
+      try {
+        const response = await fetch("/api/settings", { method: "GET", cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { settings?: { activeTabs?: string[] } };
+        if (!mounted || !Array.isArray(payload.settings?.activeTabs)) return;
+        setActiveTabs(payload.settings.activeTabs);
+      } catch {
+        // Keep default sidebar visibility when settings API is unavailable.
+      }
+    }
+
+    void loadSettingsTabs();
+
+    const onTabsUpdated = () => {
+      void loadSettingsTabs();
+    };
+    window.addEventListener("settings-tabs-updated", onTabsUpdated);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("settings-tabs-updated", onTabsUpdated);
+    };
+  }, [pathname]);
+
+  const visibleTabSet = React.useMemo(() => {
+    if (!activeTabs) return null;
+    return new Set(activeTabs.map((tab) => normalizeLabel(tab)));
+  }, [activeTabs]);
+
+  const isEntryVisible = React.useCallback(
+    (entry: SidebarEntry) => {
+      if (!visibleTabSet) return true;
+      return entry.settingKeys.some((key) => visibleTabSet.has(normalizeLabel(key)));
+    },
+    [visibleTabSet]
+  );
+
+  const visiblePortfolioItems = React.useMemo(
+    () => portfolioItems.filter((entry) => isEntryVisible(entry)),
+    [isEntryVisible]
+  );
+  const visibleDebtsItems = React.useMemo(
+    () => debtsItems.filter((entry) => isEntryVisible(entry)),
+    [isEntryVisible]
+  );
 
   return (
     <Sidebar collapsible="icon" className="border-sidebar-border">
@@ -135,71 +201,75 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <Collapsible
-                defaultOpen={pathname.startsWith("/portfolio")}
-                className="group/collapsible"
-                asChild
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={pathname === "/portfolio"} tooltip="Actifs">
-                      <CirclePlus />
-                      <span>Actifs</span>
-                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {portfolioItems.map((item) => (
-                        <SidebarMenuSubItem key={item.url}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={pathname === item.url}
-                          >
-                            <Link href={item.url}>
-                              <item.icon />
-                              <span>{item.title}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+              {visiblePortfolioItems.length > 0 ? (
+                <Collapsible
+                  defaultOpen={pathname.startsWith("/portfolio")}
+                  className="group/collapsible"
+                  asChild
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton isActive={pathname === "/portfolio"} tooltip="Actifs">
+                        <CirclePlus />
+                        <span>Actifs</span>
+                        <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visiblePortfolioItems.map((item) => (
+                          <SidebarMenuSubItem key={item.url}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={pathname === item.url}
+                            >
+                              <Link href={item.url}>
+                                <item.icon />
+                                <span>{item.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : null}
 
-              <Collapsible
-                defaultOpen={pathname.startsWith("/debts")}
-                className="group/collapsible"
-                asChild
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={pathname === "/debts"} tooltip="Passifs">
-                      <CircleMinus />
-                      <span>Passifs</span>
-                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {debtsItems.map((item) => (
-                        <SidebarMenuSubItem key={item.url}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={pathname === item.url}
-                          >
-                            <Link href={item.url}>
-                              <item.icon />
-                              <span>{item.title}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+              {visibleDebtsItems.length > 0 ? (
+                <Collapsible
+                  defaultOpen={pathname.startsWith("/debts")}
+                  className="group/collapsible"
+                  asChild
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton isActive={pathname === "/debts"} tooltip="Passifs">
+                        <CircleMinus />
+                        <span>Passifs</span>
+                        <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visibleDebtsItems.map((item) => (
+                          <SidebarMenuSubItem key={item.url}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={pathname === item.url}
+                            >
+                              <Link href={item.url}>
+                                <item.icon />
+                                <span>{item.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : null}
 
             </SidebarMenu>
           </SidebarGroupContent>
