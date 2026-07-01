@@ -23,6 +23,11 @@ function slugifyTitle(title: string) {
     .replace(/^-+|-+$/g, '') || 'note';
 }
 
+function sanitizeMdFileName(fileName: string) {
+  const base = path.basename(fileName).replace(/\.md$/i, '');
+  return `${slugifyTitle(base)}.md`;
+}
+
 function readStrategyFiles(dirPath: string): StrategyFileNote[] {
   if (!fs.existsSync(dirPath)) return [];
 
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const { content, notes } = await request.json() as {
       content: string;
-      notes?: Array<{ title?: string; markdown?: string }>;
+      notes?: Array<{ title?: string; markdown?: string; fileName?: string }>;
     };
 
     const { dirPath, filePath } = getStrategyFilePath();
@@ -84,7 +89,9 @@ export async function POST(request: NextRequest) {
       for (const note of notes) {
         const title = (note.title || 'Note').trim();
         const markdown = note.markdown || '';
-        const noteFileName = `${slugifyTitle(title)}.md`;
+        const noteFileName = note.fileName
+          ? sanitizeMdFileName(note.fileName)
+          : `${slugifyTitle(title)}.md`;
         const noteFilePath = path.join(dirPath, noteFileName);
         fs.writeFileSync(noteFilePath, markdown, 'utf8');
       }
@@ -94,5 +101,34 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Impossible de sauvegarder le fichier' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { fileName, title } = await request.json() as { fileName?: string; title?: string };
+    const { dirPath } = getStrategyFilePath();
+
+    if (!fs.existsSync(dirPath)) {
+      return NextResponse.json({ success: true, deleted: false });
+    }
+
+    const candidateNames = [
+      fileName ? sanitizeMdFileName(fileName) : null,
+      title ? `${slugifyTitle(title)}.md` : null,
+    ].filter((value): value is string => Boolean(value));
+
+    for (const candidate of candidateNames) {
+      const candidatePath = path.join(dirPath, candidate);
+      if (fs.existsSync(candidatePath)) {
+        fs.unlinkSync(candidatePath);
+        return NextResponse.json({ success: true, deleted: true, fileName: candidate });
+      }
+    }
+
+    return NextResponse.json({ success: true, deleted: false });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: 'Impossible de supprimer le fichier' }, { status: 500 });
   }
 }

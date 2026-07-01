@@ -1,5 +1,7 @@
-## Objectifs financiers
+# Objectifs d'investissement
 
-- Rendement cible annualise
-- Volatilite maximale
-- Horizon d'investissement
+- Croissance
+- Protection
+- Financement d'aventures et de projets
+- Retraite
+

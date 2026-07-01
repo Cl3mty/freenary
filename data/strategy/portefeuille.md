@@ -1,3 +1,4 @@
+# Bourse
 ## PEA
 ### ETF BNP Paribas Easy S&P 500 UCITS
 Frais raisonables : 0.12%
@@ -31,7 +32,7 @@ Stock picking d'actions de qualit√© pour lesquelles j'ai une conviction. Jusqu'√
 ### Alphabet
 Recherche, pub
 ### Meta
-Pub
+Pub, value Metaverse
 ### Amazon
 ### Apple
 Produits

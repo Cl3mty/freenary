@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import MarkdownIt from 'markdown-it';
+import markdownItTaskLists from 'markdown-it-task-lists';
 import { Plus, Trash2, Save, Download } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,6 +14,7 @@ type StrategyNote = {
   title: string;
   markdown: string;
   html: string;
+  fileName?: string;
   updatedAt: string;
 };
 
@@ -23,7 +25,11 @@ type StrategyApiFileNote = {
 };
 
 const STORAGE_KEY = "freenary.strategy.notes.v1";
-const md = new MarkdownIt({ html: true, breaks: true, linkify: true });
+const md = new MarkdownIt({ html: true, breaks: true, linkify: true }).use(markdownItTaskLists, {
+  enabled: true,
+  label: true,
+  labelAfter: true,
+});
 
 const NOTE_SEPARATOR = "\n\n---\n\n";
 const DEFAULT_NOTES = [
@@ -45,11 +51,12 @@ const DEFAULT_NOTES = [
   },
 ];
 
-const buildNote = (markdown: string, title = "Nouvelle note"): StrategyNote => ({
+const buildNote = (markdown: string, title = "Nouvelle note", fileName?: string): StrategyNote => ({
   id: crypto.randomUUID(),
   title,
   markdown,
   html: md.render(markdown),
+  fileName,
   updatedAt: new Date().toISOString(),
 });
 
@@ -110,7 +117,7 @@ export function StrategyNotesEditor() {
           const data = await response.json() as { content?: string; files?: StrategyApiFileNote[] };
           const fileNotes = (data.files ?? []).filter(note => note.markdown?.trim());
           if (fileNotes.length) {
-            const initial = fileNotes.map(note => buildNote(note.markdown, note.title));
+            const initial = fileNotes.map(note => buildNote(note.markdown, note.title, note.fileName));
             setNotes(initial);
             setSelectedId(initial[0].id);
             return;
@@ -176,18 +183,53 @@ export function StrategyNotesEditor() {
     setSelectedId(note.id);
   };
 
-  const deleteSelectedNote = () => {
+  const deleteSelectedNote = async () => {
     if (!selectedNote) return;
-    const next = notes.filter(n => n.id !== selectedNote.id);
-    if (next.length === 0) {
-      const created = defaultNote();
-      setNotes([created]);
-      setSelectedId(created.id);
-    } else {
-      const sorted = sortByUpdatedAt(next);
-      setNotes(sorted);
-      setSelectedId(sorted[0].id);
+
+    const isConfirmed = window.confirm(`Supprimer la note "${selectedNote.title}" ?`);
+    if (!isConfirmed) return;
+
+    try {
+      const deleteRes = await fetch('/api/strategy', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: selectedNote.fileName, title: selectedNote.title }),
+      });
+
+      if (!deleteRes.ok) {
+        toast.error("Échec de la suppression", {
+          description: "Impossible de supprimer le fichier markdown associé.",
+        });
+        return;
+      }
+    } catch {
+      toast.error("Erreur de connexion", {
+        description: "Le serveur de suppression est indisponible.",
+      });
+      return;
     }
+
+    const next = notes.filter(n => n.id !== selectedNote.id);
+    const resultingNotes = next.length === 0 ? [defaultNote()] : sortByUpdatedAt(next);
+    setNotes(resultingNotes);
+    setSelectedId(resultingNotes[0].id);
+
+    try {
+      await fetch('/api/strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: serializeNotes(resultingNotes),
+          notes: resultingNotes.map(note => ({ title: note.title, markdown: note.markdown, fileName: note.fileName })),
+        }),
+      });
+    } catch {
+      // Le fichier individuel est deja supprime; on conserve l'action utilisateur.
+    }
+
+    toast.success("Note supprimée", {
+      description: "Le fichier markdown associé a été supprimé.",
+    });
   };
 
   const handleMarkdownChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -215,17 +257,17 @@ export function StrategyNotesEditor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: serializeNotes(notes),
-          notes: notes.map(note => ({ title: note.title, markdown: note.markdown })),
+          notes: notes.map(note => ({ title: note.title, markdown: note.markdown, fileName: note.fileName })),
         }),
       });
 
       if (res.ok) {
-        toast.success("Strategie sauvegardee", {
-          description: "Le fichier strategy.md a ete mis a jour.",
+        toast.success("Stratégie sauvegardée", {
+          description: "Le fichier strategy.md a été mis à jour.",
         });
       } else {
-        toast.error("Echec de la sauvegarde", {
-          description: "Impossible d'ecrire dans strategy.md.",
+        toast.error("Échec de la sauvegarde", {
+          description: "Impossible d'écrire dans strategy.md.",
         });
       }
     } catch {
@@ -317,8 +359,11 @@ export function StrategyNotesEditor() {
                     [&_h6]:text-sm [&_h6]:font-semibold [&_h6]:mb-1 [&_h6]:mt-2 [&_h6]:block [&_h6]:text-foreground/30
                     [&_p]:mb-4 [&_p]:leading-relaxed
                     [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ul]:block
+                    [&_ul.contains-task-list]:list-none [&_ul.contains-task-list]:pl-0
                     [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_ol]:block
                     [&_li]:mb-1
+                    [&_li.task-list-item]:flex [&_li.task-list-item]:items-start [&_li.task-list-item]:gap-2
+                    [&_input.task-list-item-checkbox]:mt-1 [&_input.task-list-item-checkbox]:size-4
                     [&_strong]:font-bold [&_strong]:text-foreground
                     [&_em]:italic
                     [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-sm
