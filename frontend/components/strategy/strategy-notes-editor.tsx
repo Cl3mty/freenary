@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import MarkdownIt from 'markdown-it';
+import { Plus, Trash2, Save, Download } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,23 +11,88 @@ import { Input } from "@/components/ui/input";
 type StrategyNote = {
   id: string;
   title: string;
-  content: string;
+  markdown: string;
+  html: string;
   updatedAt: string;
 };
 
-const STORAGE_KEY = "freenary.strategy.notes.v1";
+type StrategyApiFileNote = {
+  title: string;
+  markdown: string;
+  fileName: string;
+};
 
-const defaultNote = (): StrategyNote => ({
+const STORAGE_KEY = "freenary.strategy.notes.v1";
+const md = new MarkdownIt({ html: true, breaks: true, linkify: true });
+
+const NOTE_SEPARATOR = "\n\n---\n\n";
+const DEFAULT_NOTES = [
+  {
+    title: "Portefeuille",
+    markdown: "## Allocation actuelle\n\n- Actions: 60%\n- Obligations: 25%\n- Liquidites: 15%",
+  },
+  {
+    title: "Objectifs",
+    markdown: "## Objectifs financiers\n\n- Rendement cible annualise\n- Volatilite maximale\n- Horizon d'investissement",
+  },
+  {
+    title: "These d'investissement",
+    markdown: "## Convictions principales\n\nDecrivez ici vos hypotheses, vos catalyseurs et vos risques.",
+  },
+  {
+    title: "Processus d'analyse de stock picking",
+    markdown: "## Check-list d'analyse\n\n1. Qualite du business\n2. Qualite du management\n3. Valorisation\n4. Risques cles",
+  },
+];
+
+const buildNote = (markdown: string, title = "Nouvelle note"): StrategyNote => ({
   id: crypto.randomUUID(),
-  title: "Nouvelle note",
-  content: "<h2>Plan stratégique</h2><p>Commencez votre prise de note ici...</p>",
+  title,
+  markdown,
+  html: md.render(markdown),
   updatedAt: new Date().toISOString(),
 });
 
+const defaultNote = (): StrategyNote => buildNote("# Plan strategique\n\nCommencez ici...");
+
+const buildDefaultNotes = (): StrategyNote[] =>
+  DEFAULT_NOTES.map(note => buildNote(note.markdown, note.title));
+
+const serializeNotes = (notes: StrategyNote[]) =>
+  notes
+    .map(note => `# ${note.title}\n\n${note.markdown}`)
+    .join(NOTE_SEPARATOR);
+
+const parseNotesFromMarkdown = (content: string): StrategyNote[] => {
+  const sections = content
+    .split(NOTE_SEPARATOR)
+    .map(section => section.trim())
+    .filter(Boolean);
+
+  if (!sections.length) return [];
+
+  return sections.map((section, index) => {
+    const lines = section.split('\n');
+    const firstLine = lines[0]?.trim() ?? "";
+    const headingMatch = /^#\s+(.+)$/.exec(firstLine);
+    const title = headingMatch?.[1]?.trim() || `Note ${index + 1}`;
+    const markdownBody = headingMatch ? lines.slice(1).join('\n').trim() : section;
+    const markdown = markdownBody || "(Note vide)";
+
+    return buildNote(markdown, title);
+  });
+};
+
+const getNotePreview = (markdown: string) =>
+  markdown
+    .replace(/^#+\s+/gm, "")
+    .replace(/[\*`>\-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+
 function sortByUpdatedAt(notes: StrategyNote[]) {
-  return [...notes].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  return [...notes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 export function StrategyNotesEditor() {
@@ -34,34 +101,62 @@ export function StrategyNotesEditor() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
 
-  const editorRef = useRef<HTMLDivElement>(null);
-
-  // Chargement notes
+  // Chargement
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const initial = [defaultNote()];
-      setNotes(initial);
-      setSelectedId(initial[0].id);
-      setIsHydrated(true);
-      return;
-    }
+    const hydrateFromSources = async () => {
+      try {
+        const response = await fetch('/api/strategy', { method: 'GET', cache: 'no-store' });
+        if (response.ok) {
+          const data = await response.json() as { content?: string; files?: StrategyApiFileNote[] };
+          const fileNotes = (data.files ?? []).filter(note => note.markdown?.trim());
+          if (fileNotes.length) {
+            const initial = fileNotes.map(note => buildNote(note.markdown, note.title));
+            setNotes(initial);
+            setSelectedId(initial[0].id);
+            return;
+          }
 
-    try {
-      const parsed = JSON.parse(raw) as StrategyNote[];
-      const safe = parsed.length ? sortByUpdatedAt(parsed) : [defaultNote()];
-      setNotes(safe);
-      setSelectedId(safe[0].id);
-    } catch {
-      const fallback = [defaultNote()];
-      setNotes(fallback);
-      setSelectedId(fallback[0].id);
-    } finally {
-      setIsHydrated(true);
-    }
+          const fileMarkdown = data.content?.trim();
+          if (fileMarkdown) {
+            const parsedFromFile = parseNotesFromMarkdown(fileMarkdown);
+            const initial = parsedFromFile.length ? parsedFromFile : [buildNote(fileMarkdown, 'Strategie')];
+            setNotes(initial);
+            setSelectedId(initial[0].id);
+            return;
+          }
+        }
+      } catch {
+        // Fallback sur localStorage si l'API n'est pas joignable.
+      }
+
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        const initial = buildDefaultNotes();
+        setNotes(initial);
+        setSelectedId(initial[0].id);
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(raw) as StrategyNote[];
+        const hydrated = parsed.map(note => ({
+          ...note,
+          html: md.render(note.markdown ?? ''),
+        }));
+        const sorted = hydrated.length ? sortByUpdatedAt(hydrated) : buildDefaultNotes();
+        setNotes(sorted);
+        setSelectedId(sorted[0].id);
+      } catch {
+        const fallback = buildDefaultNotes();
+        setNotes(fallback);
+        setSelectedId(fallback[0].id);
+      }
+    };
+
+    hydrateFromSources().finally(() => setIsHydrated(true));
   }, []);
 
-  // Auto-save
+  // Auto-save localStorage
   useEffect(() => {
     if (!isHydrated) return;
     setSaveState("saving");
@@ -69,15 +164,14 @@ export function StrategyNotesEditor() {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1200);
-    }, 400);
+    }, 500);
     return () => clearTimeout(timer);
   }, [notes, isHydrated]);
 
-  const selectedNote = notes.find((n) => n.id === selectedId) ?? null;
+  const selectedNote = notes.find(n => n.id === selectedId);
 
   const createNote = () => {
     const note = defaultNote();
-    note.content = "<p></p>";
     setNotes(prev => sortByUpdatedAt([note, ...prev]));
     setSelectedId(note.id);
   };
@@ -96,122 +190,145 @@ export function StrategyNotesEditor() {
     }
   };
 
-  const updateSelectedNote = (patch: Partial<StrategyNote>) => {
-    if (!selectedNote) return;
-    setNotes(prev =>
-      sortByUpdatedAt(prev.map(note =>
-        note.id === selectedNote.id ? { ...note, ...patch, updatedAt: new Date().toISOString() } : note
-      ))
-    );
+  const handleMarkdownChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const markdown = e.target.value;
+    const html = md.render(markdown);
+
+    setNotes(prev => sortByUpdatedAt(prev.map(note =>
+      note.id === selectedId ? { ...note, markdown, html, updatedAt: new Date().toISOString() } : note
+    )));
   };
 
-  // Commande robuste
-  const execCommand = useCallback((command: string, value?: string) => {
-    const editor = editorRef.current;
-    if (!editor) return;
+  const updateTitle = (title: string) => {
+    setNotes(prev => sortByUpdatedAt(prev.map(note =>
+      note.id === selectedId ? { ...note, title, updatedAt: new Date().toISOString() } : note
+    )));
+  };
 
-    // Force focus + sélection
-    editor.focus();
+  // === Sauvegarde dans /data/strategy/strategy.md ===
+  const saveToFile = async () => {
+    if (!selectedNote) return;
 
-    setTimeout(() => {
-      try {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          document.execCommand(command, false, value || undefined);
-          updateSelectedNote({ content: editor.innerHTML });
-        }
-      } catch (err) {
-        console.error("execCommand error:", err);
+    try {
+      const res = await fetch('/api/strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: serializeNotes(notes),
+          notes: notes.map(note => ({ title: note.title, markdown: note.markdown })),
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Strategie sauvegardee", {
+          description: "Le fichier strategy.md a ete mis a jour.",
+        });
+      } else {
+        toast.error("Echec de la sauvegarde", {
+          description: "Impossible d'ecrire dans strategy.md.",
+        });
       }
-    }, 30);
-  }, [selectedNote]);
-
-  // Chargement contenu
-  useEffect(() => {
-    if (selectedNote && editorRef.current) {
-      editorRef.current.innerHTML = selectedNote.content || "<p></p>";
+    } catch {
+      toast.error("Erreur de connexion", {
+        description: "Le serveur de sauvegarde est indisponible.",
+      });
     }
-  }, [selectedNote]);
+  };
 
   if (!isHydrated || !selectedNote) {
-    return <div className="p-6 text-sm text-muted-foreground">Chargement...</div>;
+    return <div className="p-6">Chargement...</div>;
   }
 
   return (
-    <div className="grid min-h-[calc(100vh-8rem)] grid-cols-1 gap-4 p-4 md:grid-cols-[280px_1fr] md:p-6">
-      <aside className="rounded-2xl bg-card p-4 shadow-sm">
-        {/* ... sidebar identique ... */}
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Notes</h2>
-          <Button size="icon-sm" variant="outline" onClick={createNote}>
-            <Plus className="size-4" />
-          </Button>
+    <div className="min-h-[calc(100vh-8rem)] p-4 md:p-6">
+      <section className="rounded-2xl bg-card shadow-sm border overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] min-h-[calc(100vh-11rem)]">
+          <aside className="border-r bg-muted/30 flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between gap-2">
+              <p className="font-semibold text-sm">Mes notes</p>
+              <Button onClick={createNote} size="sm" className="gap-1.5">
+                <Plus className="size-4" />
+                Ajouter
+              </Button>
+            </div>
+
+            <div className="p-2 overflow-auto flex-1">
+              {notes.map(note => {
+                const isSelected = note.id === selectedId;
+                return (
+                  <button
+                    key={note.id}
+                    type="button"
+                    onClick={() => setSelectedId(note.id)}
+                    className={`w-full text-left rounded-xl p-3 mb-1.5 border transition-colors ${
+                      isSelected
+                        ? "bg-card border-primary/40 shadow-sm"
+                        : "bg-transparent border-transparent hover:bg-card/70"
+                    }`}
+                  >
+                    <p className="font-medium text-sm truncate">{note.title || "Sans titre"}</p>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {getNotePreview(note.markdown) || "Aucun contenu"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <div className="p-5 flex flex-col gap-5 min-w-0">
+            <div className="flex justify-between items-center gap-3">
+              <Input
+                value={selectedNote.title}
+                onChange={(e) => updateTitle(e.target.value)}
+                className="text-xl font-semibold"
+                placeholder="Titre de la note"
+              />
+              <div className="flex items-center gap-2">
+                <Button onClick={deleteSelectedNote} variant="ghost" size="icon" aria-label="Supprimer la note">
+                  <Trash2 className="size-4" />
+                </Button>
+                <Button onClick={saveToFile} variant="outline" className="gap-2">
+                  <Download className="size-4" />
+                  Sauvegarder
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 flex-1 min-h-0">
+              <div className="border rounded-xl overflow-hidden flex flex-col bg-background min-h-[280px]">
+                <div className="bg-muted px-4 py-3 font-medium border-b">Markdown</div>
+                <textarea
+                  className="flex-1 p-5 font-mono text-[15px] leading-relaxed resize-none focus:outline-none bg-transparent"
+                  value={selectedNote.markdown}
+                  onChange={handleMarkdownChange}
+                />
+              </div>
+
+              <div className="border rounded-xl overflow-hidden flex flex-col bg-background min-h-[280px]">
+                <div className="bg-muted px-4 py-3 font-medium border-b text-sm">Rendu</div>
+                <div
+                  className="flex-1 p-6 overflow-auto max-w-none text-card-foreground
+                    [&_h1]:text-3xl [&_h1]:font-extrabold [&_h1]:mb-4 [&_h1]:mt-2 [&_h1]:block [&_h1]:border-b [&_h1]:pb-2 [&_h1]:text-sidebar-primary
+                    [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mb-3 [&_h2]:mt-4 [&_h2]:block [&_h2]:text-sidebar-primary/70
+                    [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:mb-2 [&_h3]:mt-3 [&_h3]:block [&_h3]:text-sidebar-primary/50
+                    [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-3 [&_h4]:block [&_h4]:text-foreground/70
+                    [&_h5]:text-base [&_h5]:font-semibold [&_h5]:mb-1 [&_h5]:mt-2 [&_h5]:block [&_h5]:text-foreground/50
+                    [&_h6]:text-sm [&_h6]:font-semibold [&_h6]:mb-1 [&_h6]:mt-2 [&_h6]:block [&_h6]:text-foreground/30
+                    [&_p]:mb-4 [&_p]:leading-relaxed
+                    [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ul]:block
+                    [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_ol]:block
+                    [&_li]:mb-1
+                    [&_strong]:font-bold [&_strong]:text-foreground
+                    [&_em]:italic
+                    [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-sm
+                    [&_blockquote]:border-l-4 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:my-4"
+                  dangerouslySetInnerHTML={{ __html: selectedNote.html }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
-
-        <div className="space-y-2">
-          {notes.map((note) => (
-            <button
-              key={note.id}
-              onClick={() => setSelectedId(note.id)}
-              className={`w-full rounded-lg px-3 py-2 text-left transition ${
-                note.id === selectedId ? "bg-sidebar-primary text-sidebar-primary-foreground" : "hover:bg-sidebar-accent"
-              }`}
-            >
-              <p className="truncate font-medium">{note.title}</p>
-              <p className="text-xs opacity-70">{new Date(note.updatedAt).toLocaleString("fr-FR")}</p>
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <section className="rounded-2xl bg-card p-4 shadow-sm flex flex-col">
-        <div className="mb-4 flex gap-2">
-          <Input
-            value={selectedNote.title}
-            onChange={(e) => updateSelectedNote({ title: e.target.value })}
-            placeholder="Titre de la note"
-          />
-          <Button variant="destructive" onClick={deleteSelectedNote}>
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex flex-wrap gap-2 mb-3 border-b pb-3">
-          <Button onClick={() => execCommand("bold")} variant="outline" size="sm">Gras</Button>
-          <Button onClick={() => execCommand("italic")} variant="outline" size="sm">Italique</Button>
-          <Button onClick={() => execCommand("underline")} variant="outline" size="sm">Souligné</Button>
-          
-          <Button onClick={() => execCommand("formatBlock", "h1")} variant="outline" size="sm">H1</Button>
-          <Button onClick={() => execCommand("formatBlock", "h2")} variant="outline" size="sm">H2</Button>
-          <Button onClick={() => execCommand("formatBlock", "h3")} variant="outline" size="sm">H3</Button>
-
-          <Button onClick={() => execCommand("insertUnorderedList")} variant="outline" size="sm">• Liste</Button>
-          <Button onClick={() => execCommand("indent")} variant="outline" size="sm">→ Indent</Button>
-          <Button onClick={() => execCommand("outdent")} variant="outline" size="sm">← Outdent</Button>
-
-          <input
-            type="color"
-            onChange={(e) => execCommand("foreColor", e.target.value)}
-            className="w-10 h-9 border rounded cursor-pointer"
-          />
-        </div>
-
-        {/* Éditeur */}
-        <div
-          ref={editorRef}
-          contentEditable
-          dir="ltr"
-          spellCheck={false}
-          onInput={(e) => updateSelectedNote({ content: (e.target as HTMLDivElement).innerHTML })}
-          className="min-h-[520px] p-5 border rounded-md bg-white dark:bg-zinc-950 text-base leading-relaxed focus:outline-none"
-          style={{
-            direction: 'ltr',
-            textAlign: 'left',
-            unicodeBidi: 'plaintext',
-            whiteSpace: 'pre-wrap',
-          }}
-        />
       </section>
     </div>
   );
