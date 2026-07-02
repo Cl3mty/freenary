@@ -1,0 +1,17 @@
+{
+  "name": "Crédit auto",
+  "data": {
+    "id": "f8573337-85ae-48b0-9568-b3b2d5467beb",
+    "name": "Crédit auto",
+    "capital": 20000,
+    "apport": 0,
+    "taeg": 5,
+    "termMonths": 60,
+    "deferredMonths": 0,
+    "insuranceMonthly": 50,
+    "dossierFees": 0,
+    "firstPaymentDate": "2026-07-02",
+    "createdAt": "2026-07-02T08:28:59.036Z"
+  },
+  "updatedAt": "2026-07-02T08:29:11.591Z"
+}

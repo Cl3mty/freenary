@@ -77,7 +77,7 @@ const portfolioItems: SidebarEntry[] = [
 
 const debtsItems: SidebarEntry[] = [
   { title: "Emprunts", url: "/debts/loans", icon: Landmark, settingKeys: ["Emprunts"] },
-  { title: "Prêts immobiliers", url: "/debts/morgages", icon: Building2, settingKeys: ["Prêts immobiliers", "Prets immobiliers"] },
+  { title: "Prêts immobiliers", url: "/debts/mortgages", icon: Building2, settingKeys: ["Prêts immobiliers", "Prets immobiliers"] },
 ];
 
 // Placeholder en attendant l'auth locale offline

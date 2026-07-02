@@ -29,7 +29,8 @@ type SavingsAccountFile = {
   updatedAt: string;
 };
 
-const storageDir = path.join(process.cwd(), "..", "data", "savings-accounts");
+const storageDir = path.join(process.cwd(), "..", "data", "portfolio", "savings-accounts");
+const previousStorageDir = path.join(process.cwd(), "..", "data", "savings-accounts");
 const legacyStorageFile = path.join(process.cwd(), "..", "data", "portfolio", "savingsAccounts.json");
 
 const defaultPayload: SavingsPayload = {
@@ -60,6 +61,40 @@ const defaultPayload: SavingsPayload = {
 
 async function ensureStorageDir() {
   await fs.mkdir(storageDir, { recursive: true });
+}
+
+async function migratePreviousStorageDirIfNeeded() {
+  await ensureStorageDir();
+
+  let newDirFiles: string[] = [];
+  try {
+    newDirFiles = (await fs.readdir(storageDir)).filter((name) => name.endsWith(".json"));
+  } catch {
+    newDirFiles = [];
+  }
+
+  if (newDirFiles.length > 0) {
+    return;
+  }
+
+  let oldDirFiles: string[] = [];
+  try {
+    oldDirFiles = (await fs.readdir(previousStorageDir)).filter((name) => name.endsWith(".json"));
+  } catch {
+    oldDirFiles = [];
+  }
+
+  if (oldDirFiles.length === 0) {
+    return;
+  }
+
+  await Promise.all(
+    oldDirFiles.map(async (fileName) => {
+      const from = path.join(previousStorageDir, fileName);
+      const to = path.join(storageDir, fileName);
+      await fs.rename(from, to);
+    })
+  );
 }
 
 function normalizePayload(input: Partial<SavingsPayload> | null | undefined): SavingsPayload {
@@ -221,6 +256,8 @@ async function readAccountsFromFiles(): Promise<SavingsAccount[]> {
 }
 
 async function readPayload(): Promise<SavingsPayload> {
+  await migratePreviousStorageDirIfNeeded();
+
   const accountsFromFiles = await readAccountsFromFiles();
   if (accountsFromFiles.length > 0) {
     return { accounts: accountsFromFiles };
