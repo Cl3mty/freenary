@@ -1,0 +1,32 @@
+{
+  "id": "4f45e6c8-6f86-400e-be2e-041c63164375",
+  "order": 1,
+  "account": "AV1",
+  "initialState": {
+    "supports": [
+      {
+        "id": "7134a806-df0f-4870-9851-3acacec332d6",
+        "name": "",
+        "isin": "",
+        "quantity": 0,
+        "pru": 0,
+        "currentPrice": 0
+      }
+    ],
+    "capturedAt": "2026-07-02T07:47:15.983Z"
+  },
+  "transactions": [],
+  "currentState": {
+    "supports": [
+      {
+        "id": "7134a806-df0f-4870-9851-3acacec332d6",
+        "name": "",
+        "isin": "",
+        "quantity": 0,
+        "pru": 0,
+        "currentPrice": 0
+      }
+    ],
+    "updatedAt": "2026-07-02T07:47:15.983Z"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "account": "Livret A",
+  "data": {
+    "id": "acc-livret-a",
+    "bank": "Banque Populaire",
+    "account": "Livret A",
+    "balance": 69.12,
+    "transactions": []
+  },
+  "updatedAt": "2026-07-02T08:05:59.862Z"
+}

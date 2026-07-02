@@ -1,0 +1,32 @@
+{
+  "id": "a048cdcb-49f5-409d-8d25-3367c51ed3eb",
+  "order": 7,
+  "account": "PEG",
+  "initialState": {
+    "supports": [
+      {
+        "id": "c92fc53e-cbff-49b1-b671-77c3c070d347",
+        "name": "",
+        "isin": "",
+        "quantity": 0,
+        "pru": 0,
+        "currentPrice": 0
+      }
+    ],
+    "capturedAt": "2026-07-02T07:47:15.984Z"
+  },
+  "transactions": [],
+  "currentState": {
+    "supports": [
+      {
+        "id": "c92fc53e-cbff-49b1-b671-77c3c070d347",
+        "name": "",
+        "isin": "",
+        "quantity": 0,
+        "pru": 0,
+        "currentPrice": 0
+      }
+    ],
+    "updatedAt": "2026-07-02T07:47:15.984Z"
+  }
+}

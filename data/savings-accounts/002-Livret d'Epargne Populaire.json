@@ -1,0 +1,11 @@
+{
+  "account": "Livret d'Epargne Populaire",
+  "data": {
+    "id": "acc-lep",
+    "bank": "Caisse d'Epargne",
+    "account": "Livret d'Epargne Populaire",
+    "balance": 2300,
+    "transactions": []
+  },
+  "updatedAt": "2026-07-02T08:05:59.862Z"
+}

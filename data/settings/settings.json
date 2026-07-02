@@ -3,7 +3,6 @@
   "currency": "EUR",
   "activeTabs": [
     "Actions & Fonds",
-    "Startups & PME",
     "Immobilier",
     "Crypto",
     "Metaux precieux",
@@ -12,6 +11,7 @@
     "Epargne",
     "Métaux précieux",
     "Emprunts",
-    "Prêts immobiliers"
+    "Prêts immobiliers",
+    "Startups & PME"
   ]
 }
