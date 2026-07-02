@@ -23,8 +23,8 @@ type LoanFile = {
   updatedAt: string;
 };
 
-const storageDir = path.join(process.cwd(), "..", "data", "portfolio", "debts", "loans");
-const previousStorageDir = path.join(process.cwd(), "..", "data", "debts", "loans");
+const storageDir = path.join(process.cwd(), "..", "data", "debts", "loans");
+const previousStorageDir = path.join(process.cwd(), "..", "data", "portfolio", "debts", "loans");
 
 function sanitizeFileName(name: string): string {
   const trimmed = name.trim() || "Emprunt";

@@ -1,0 +1,59 @@
+{
+  "sources": [
+    {
+      "id": "ledger",
+      "name": "Ledger",
+      "cashBalanceEur": 1500,
+      "assets": [
+        {
+          "id": "ledger-btc",
+          "name": "Bitcoin",
+          "symbol": "BTC",
+          "quantity": 0.142,
+          "unitPurchasePrice": 32000,
+          "currentUnitPrice": 56000
+        },
+        {
+          "id": "ledger-eth",
+          "name": "Ethereum",
+          "symbol": "ETH",
+          "quantity": 1.95,
+          "unitPurchasePrice": 1700,
+          "currentUnitPrice": 2600
+        }
+      ]
+    },
+    {
+      "id": "binance",
+      "name": "Binance",
+      "cashBalanceEur": 800,
+      "assets": [
+        {
+          "id": "binance-bnb",
+          "name": "BNB",
+          "symbol": "BNB",
+          "quantity": 2.8,
+          "unitPurchasePrice": 250,
+          "currentUnitPrice": 510
+        },
+        {
+          "id": "binance-sol",
+          "name": "Solana",
+          "symbol": "SOL",
+          "quantity": 14,
+          "unitPurchasePrice": 70,
+          "currentUnitPrice": 140
+        }
+      ]
+    }
+  ],
+  "history": [
+    { "date": "2026-01", "total": 9800 },
+    { "date": "2026-02", "total": 10350 },
+    { "date": "2026-03", "total": 11120 },
+    { "date": "2026-04", "total": 10640 },
+    { "date": "2026-05", "total": 11980 },
+    { "date": "2026-06", "total": 12410 }
+  ],
+  "transactions": []
+}
