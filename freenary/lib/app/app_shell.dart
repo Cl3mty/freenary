@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../features/navigation/app_sidebar.dart';
 import 'theme_controller.dart';
 
@@ -20,9 +20,22 @@ class _AppShellState extends State<AppShell> {
 
   void _select(String key) {
     setState(() => _selectedKey = key);
-    if (MediaQuery.of(context).size.width < _breakpoint) {
-      Navigator.of(context).maybePop(); // ferme le drawer sur mobile/étroit
-    }
+  }
+
+  void _openMobileDrawer(BuildContext context) {
+    openDrawerOverlay(
+      context: context,
+      position: OverlayPosition.left,
+      builder: (drawerContext) => AppSidebar(
+        selectedKey: _selectedKey,
+        onSelect: (key) {
+          closeDrawer(drawerContext);
+          _select(key);
+        },
+        collapsed: false,
+        onToggleCollapse: () {},
+      ),
+    );
   }
 
   @override
@@ -31,20 +44,18 @@ class _AppShellState extends State<AppShell> {
     final page = widget.pages[_selectedKey]?.call(context) ??
         const Center(child: Text('Page introuvable'));
 
-    final sidebar = AppSidebar(
-      selectedKey: _selectedKey,
-      onSelect: _select,
-      collapsed: isWide && _collapsed,
-      onToggleCollapse: () => setState(() => _collapsed = !_collapsed),
-      onToggleTheme: widget.themeController.toggleLightDark,
-    );
-
     if (isWide) {
+      final sidebar = AppSidebar(
+        selectedKey: _selectedKey,
+        onSelect: _select,
+        collapsed: _collapsed,
+        onToggleCollapse: () => setState(() => _collapsed = !_collapsed),
+      );
       return Scaffold(
-        body: Row(
+        child: Row(
           children: [
             sidebar,
-            const VerticalDivider(width: 1),
+            Container(width: 1, color: Theme.of(context).colorScheme.border),
             Expanded(child: page),
           ],
         ),
@@ -52,9 +63,23 @@ class _AppShellState extends State<AppShell> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Freenary')),
-      drawer: Drawer(child: sidebar),
-      body: page,
+      headers: [
+        AppBar(
+          title: const Text('Freenary'),
+          leading: [
+            Builder(
+              builder: (barContext) => GestureDetector(
+                onTap: () => _openMobileDrawer(barContext),
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(LucideIcons.menu),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      child: page,
     );
   }
 }

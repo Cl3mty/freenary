@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 class NavItem {
   final String key;
   final String label;
-  final IconData icon;
+  final IconData icon;   // redevient IconData standard
   final List<NavItem> children;
 
   const NavItem({
@@ -17,35 +17,34 @@ class NavItem {
 class NavGroup {
   final String label;
   final List<NavItem> items;
-
   const NavGroup({required this.label, required this.items});
 }
 
 const patrimoineGroup = NavGroup(
   label: 'Patrimoine',
   items: [
-    NavItem(key: 'dashboard', label: 'Tableau de bord', icon: Icons.dashboard_outlined),
+    NavItem(key: 'dashboard', label: 'Tableau de bord', icon: LucideIcons.gauge),
     NavItem(
       key: 'actifs',
       label: 'Actifs',
-      icon: Icons.add_circle_outline,
+      icon: LucideIcons.circlePlus,
       children: [
-        NavItem(key: 'actifs_actions_fonds', label: 'Actions & Fonds', icon: Icons.show_chart),
-        NavItem(key: 'actifs_startups_pme', label: 'Startups & PME', icon: Icons.rocket_launch_outlined),
-        NavItem(key: 'actifs_immobilier', label: 'Immobilier', icon: Icons.home_outlined),
-        NavItem(key: 'actifs_crypto', label: 'Crypto', icon: Icons.currency_bitcoin),
-        NavItem(key: 'actifs_metaux_precieux', label: 'Métaux précieux', icon: Icons.diamond_outlined),
-        NavItem(key: 'actifs_epargne', label: 'Épargne', icon: Icons.savings_outlined),
-        NavItem(key: 'actifs_autres', label: 'Autres', icon: Icons.category_outlined),
+        NavItem(key: 'actifs_actions_fonds', label: 'Actions & Fonds', icon: LucideIcons.chartLine),
+        NavItem(key: 'actifs_startups_pme', label: 'Startups & PME', icon: LucideIcons.rocket),
+        NavItem(key: 'actifs_immobilier', label: 'Immobilier', icon: LucideIcons.house),
+        NavItem(key: 'actifs_crypto', label: 'Crypto', icon: LucideIcons.bitcoin),
+        NavItem(key: 'actifs_metaux_precieux', label: 'Métaux précieux', icon: LucideIcons.gem),
+        NavItem(key: 'actifs_epargne', label: 'Épargne', icon: LucideIcons.piggyBank),
+        NavItem(key: 'actifs_autres', label: 'Autres', icon: LucideIcons.boxes),
       ],
     ),
     NavItem(
       key: 'passifs',
       label: 'Passifs',
-      icon: Icons.remove_circle_outline,
+      icon: LucideIcons.circleMinus,
       children: [
-        NavItem(key: 'passifs_emprunts', label: 'Emprunts', icon: Icons.request_quote_outlined),
-        NavItem(key: 'passifs_prets_immobiliers', label: 'Prêts immobiliers', icon: Icons.house_outlined),
+        NavItem(key: 'passifs_emprunts', label: 'Emprunts', icon: LucideIcons.handCoins),
+        NavItem(key: 'passifs_prets_immobiliers', label: 'Prêts immobiliers', icon: LucideIcons.house),
       ],
     ),
   ],
@@ -54,9 +53,9 @@ const patrimoineGroup = NavGroup(
 const outilsGroup = NavGroup(
   label: 'Outils',
   items: [
-    NavItem(key: 'strategie', label: 'Stratégie', icon: Icons.edit_note_outlined),
-    NavItem(key: 'budget', label: 'Budget', icon: Icons.account_balance_wallet_outlined),
-    NavItem(key: 'taxation', label: 'Taxation', icon: Icons.local_fire_department_outlined),
-    NavItem(key: 'simulation', label: 'Simulation', icon: Icons.show_chart),
+    NavItem(key: 'strategie', label: 'Stratégie', icon: LucideIcons.notebookPen),
+    NavItem(key: 'budget', label: 'Budget', icon: LucideIcons.wallet),
+    NavItem(key: 'taxation', label: 'Taxation', icon: LucideIcons.flame),
+    NavItem(key: 'simulation', label: 'Simulation', icon: LucideIcons.trendingUp),
   ],
 );

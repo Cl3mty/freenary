@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:window_manager/window_manager.dart';
-import 'app/theme.dart';
+import 'core/storage/vault_folder_service.dart';
+import 'features/onboarding/onboarding_screen.dart';
+import 'features/settings/settings_screen.dart';
 import 'app/theme_controller.dart';
 import 'app/app_shell.dart';
 
@@ -32,42 +34,86 @@ class FreenaryApp extends StatefulWidget {
 
 class _FreenaryAppState extends State<FreenaryApp> {
   final _themeController = ThemeController();
+  final _vaultFolderService = VaultFolderService();
+
+  bool _checkingVault = true;
+  String? _vaultPath;
 
   @override
   void initState() {
     super.initState();
     _themeController.load();
     _themeController.addListener(() => setState(() {}));
+    _loadVault();
   }
+
+  Future<void> _loadVault() async {
+    final path = await _vaultFolderService.getSavedVaultPath();
+    setState(() {
+      _vaultPath = path;
+      _checkingVault = false;
+    });
+  }
+
+  void _onVaultReady(String path) => setState(() => _vaultPath = path);
+
+  void _resetVault() => setState(() => _vaultPath = null);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ShadcnApp(
       title: 'Freenary',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: _themeController.mode,
-      home: AppShell(
-        themeController: _themeController,
-        pages: {
-          'dashboard': (_) => const Center(child: Text('Tableau de bord')),
-          'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
-          'actifs_startups_pme': (_) => const Center(child: Text('Startups & PME')),
-          'actifs_immobilier': (_) => const Center(child: Text('Immobilier')),
-          'actifs_crypto': (_) => const Center(child: Text('Crypto')),
-          'actifs_metaux_precieux': (_) => const Center(child: Text('Métaux précieux')),
-          'actifs_epargne': (_) => const Center(child: Text('Épargne')),
-          'actifs_autres': (_) => const Center(child: Text('Autres')),
-          'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
-          'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
-          'strategie': (_) => const Center(child: Text('Stratégie')),
-          'budget': (_) => const Center(child: Text('Budget')),
-          'taxation': (_) => const Center(child: Text('Taxation')),
-          'simulation': (_) => const Center(child: Text('Simulation')),
-          'settings': (_) => const Center(child: Text('Réglages')),
-        },
+      theme: ThemeData(
+        colorScheme: LegacyColorSchemes.lightZinc().recolor(const Color(0xFFF4BE7E)),
+        radius: 0.6,
       ),
+      darkTheme: ThemeData(
+        colorScheme: LegacyColorSchemes.darkZinc().recolor(const Color(0xFFF4BE7E)),
+        radius: 0.6,
+      ),
+      themeMode: _themeController.mode,
+      home: _buildHome(),
+    );
+  }
+
+  Widget _buildHome() {
+    if (_checkingVault) {
+      return const Scaffold(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_vaultPath == null) {
+      return OnboardingScreen(
+        vaultFolderService: _vaultFolderService,
+        onVaultReady: _onVaultReady,
+      );
+    }
+    return AppShell(
+      themeController: _themeController,
+      pages: {
+        'dashboard': (_) => const Center(child: Text('Tableau de bord')),
+        'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
+        'actifs_startups_pme': (_) => const Center(child: Text('Startups & PME')),
+        'actifs_immobilier': (_) => const Center(child: Text('Immobilier')),
+        'actifs_crypto': (_) => const Center(child: Text('Crypto')),
+        'actifs_metaux_precieux': (_) => const Center(child: Text('Métaux précieux')),
+        'actifs_epargne': (_) => const Center(child: Text('Épargne')),
+        'actifs_autres': (_) => const Center(child: Text('Autres')),
+        'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
+        'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
+        'strategie': (_) => const Center(child: Text('Stratégie')),
+        'budget': (_) => const Center(child: Text('Budget')),
+        'taxation': (_) => const Center(child: Text('Taxation')),
+        'simulation': (_) => const Center(child: Text('Simulation')),
+        'settings': (_) => SettingsScreen(
+              vaultFolderService: _vaultFolderService,
+              currentVaultPath: _vaultPath!,
+              onVaultChanged: _onVaultReady,
+              onVaultReset: _resetVault,
+              themeController: _themeController,
+            ),
+      },
     );
   }
 }
