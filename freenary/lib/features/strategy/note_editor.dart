@@ -28,18 +28,13 @@ class _NoteEditorState extends State<NoteEditor> {
 
   final FocusNode _focusNode = FocusNode();
 
-  // Encode underline et color en HTML brut (<u>, <span style="color:...">)
-  // car le markdown standard n'a pas de syntaxe pour ces deux attributs.
+  // Encode underline en HTML brut (<u>) car le markdown standard n'a pas de
+  // syntaxe pour cet attribut.
   final DeltaToMarkdown _deltaToMarkdown = DeltaToMarkdown(
     customTextAttrsHandlers: {
       Attribute.underline.key: CustomAttributeHandler(
         beforeContent: (attribute, node, output) => output.write('<u>'),
         afterContent: (attribute, node, output) => output.write('</u>'),
-      ),
-      Attribute.color.key: CustomAttributeHandler(
-        beforeContent: (attribute, node, output) =>
-            output.write('<span style="color:${attribute.value}">'),
-        afterContent: (attribute, node, output) => output.write('</span>'),
       ),
     },
   );
@@ -70,13 +65,82 @@ class _NoteEditorState extends State<NoteEditor> {
       ),
     );
     final rawDelta = mdToDelta.convert(markdown.isEmpty ? '# Nouvelle note\n' : markdown);
-    final delta = _normalizeLinkedTextAttributes(_applyRawHtmlFormatting(rawDelta));
+    final delta = _applyHeadingParagraphIndentation(
+      _stripDisallowedColorAttributes(
+        _normalizeLinkedTextAttributes(_applyRawHtmlFormatting(rawDelta)),
+      ),
+    );
     final controller = QuillController(
       document: Document.fromDelta(delta),
       selection: const TextSelection.collapsed(offset: 0),
     );
     controller.changes.listen((_) => _scheduleSave());
     setState(() => _controller = controller);
+  }
+
+  Delta _applyHeadingParagraphIndentation(Delta input) {
+    final result = Delta();
+    int? currentHeadingIndentLevel;
+    var lineHasContent = false;
+
+    Map<String, dynamic>? textAttributes(Map<String, dynamic>? attrs) {
+      if (attrs == null || attrs.isEmpty) return null;
+      final filtered = Map<String, dynamic>.from(attrs)
+        ..removeWhere((key, _) => Attribute.blockKeys.contains(key));
+      return filtered.isEmpty ? null : filtered;
+    }
+
+    Map<String, dynamic> lineAttributes(Map<String, dynamic>? attrs) =>
+        attrs == null ? <String, dynamic>{} : Map<String, dynamic>.from(attrs);
+
+    for (final op in input.toList()) {
+      if (op.data is! String) {
+        result.push(op);
+        lineHasContent = true;
+        continue;
+      }
+
+      final attrs = op.attributes;
+      final text = op.data as String;
+      final parts = text.split('\n');
+
+      for (var index = 0; index < parts.length; index++) {
+        final chunk = parts[index];
+        final isLineBreak = index < parts.length - 1;
+
+        if (chunk.isNotEmpty) {
+          result.insert(chunk, textAttributes(attrs));
+          lineHasContent = true;
+        }
+
+        if (!isLineBreak) continue;
+
+        final newlineAttrs = lineAttributes(attrs);
+        final headerLevel = newlineAttrs[Attribute.header.key] as int?;
+        final hasDerivedIndentTarget =
+            !newlineAttrs.containsKey(Attribute.header.key) &&
+            !newlineAttrs.containsKey(Attribute.list.key) &&
+            !newlineAttrs.containsKey(Attribute.blockQuote.key) &&
+            !newlineAttrs.containsKey(Attribute.codeBlock.key);
+
+        if (hasDerivedIndentTarget) {
+          if (lineHasContent && currentHeadingIndentLevel != null) {
+            newlineAttrs[Attribute.indent.key] = currentHeadingIndentLevel + 1;
+          } else {
+            newlineAttrs.remove(Attribute.indent.key);
+          }
+        }
+
+        result.insert('\n', newlineAttrs.isEmpty ? null : newlineAttrs);
+
+        if (headerLevel != null) {
+          currentHeadingIndentLevel = headerLevel > 1 ? headerLevel - 1 : 0;
+        }
+        lineHasContent = false;
+      }
+    }
+
+    return result;
   }
 
   /// Les liens gardent toujours leur couleur d'accent: on retire toute couleur
@@ -96,6 +160,50 @@ class _NoteEditorState extends State<NoteEditor> {
         op.data,
         normalizedAttrs.isEmpty ? null : normalizedAttrs,
       );
+    }
+    return result;
+  }
+
+  // Les couleurs texte/surlignage sont désactivées dans cet éditeur.
+  Delta _stripDisallowedColorAttributes(Delta input) {
+    final result = Delta();
+    for (final op in input.toList()) {
+      final attrs = op.attributes;
+      if (attrs == null || attrs.isEmpty) {
+        result.push(op);
+        continue;
+      }
+
+      final cleanedAttrs = Map<String, dynamic>.from(attrs)
+        ..remove(Attribute.color.key)
+        ..remove(Attribute.background.key);
+
+      result.insert(op.data, cleanedAttrs.isEmpty ? null : cleanedAttrs);
+    }
+    return result;
+  }
+
+  Delta _stripDerivedParagraphIndentation(Delta input) {
+    final result = Delta();
+    for (final op in input.toList()) {
+      final attrs = op.attributes;
+      if (attrs == null || !attrs.containsKey(Attribute.indent.key)) {
+        result.push(op);
+        continue;
+      }
+
+      final shouldKeepIndent = attrs.containsKey(Attribute.list.key) ||
+          attrs.containsKey(Attribute.blockQuote.key) ||
+          attrs.containsKey(Attribute.codeBlock.key) ||
+          attrs.containsKey(Attribute.header.key);
+      if (shouldKeepIndent) {
+        result.push(op);
+        continue;
+      }
+
+      final cleanedAttrs = Map<String, dynamic>.from(attrs)
+        ..remove(Attribute.indent.key);
+      result.insert(op.data, cleanedAttrs.isEmpty ? null : cleanedAttrs);
     }
     return result;
   }
@@ -214,7 +322,10 @@ class _NoteEditorState extends State<NoteEditor> {
     final controller = _controller;
     if (controller == null) return;
     final delta = controller.document.toDelta();
-    final markdown = _deltaToMarkdown.convert(delta);
+    final cleanedDelta = _stripDerivedParagraphIndentation(
+      _stripDisallowedColorAttributes(delta),
+    );
+    final markdown = _deltaToMarkdown.convert(cleanedDelta);
     await widget.repository.writeNote(widget.noteId, markdown);
     widget.onSaved();
   }
@@ -232,40 +343,63 @@ class _NoteEditorState extends State<NoteEditor> {
   Widget build(BuildContext context) {
     final controller = _controller;
     final accentColor = Theme.of(context).colorScheme.primary;
+    final headingColor100 = accentColor;
+    final headingColor80 = accentColor.withValues(alpha: 0.8);
+    final headingColor60 = accentColor.withValues(alpha: 0.6);
+    final headingColor40 = accentColor.withValues(alpha: 0.4);
+    final defaultStyles = DefaultStyles.getInstance(context);
+    final defaultListStyle = defaultStyles.lists!;
+    final baseIndentWidthBuilder = defaultListStyle.indentWidthBuilder;
+
+    DefaultTextBlockStyle? headingStyle(
+      DefaultTextBlockStyle? base,
+      double leftIndent, {
+      Color? color,
+    }) {
+      if (base == null) return null;
+      return base.copyWith(
+        style: base.style.copyWith(color: color),
+        horizontalSpacing: base.horizontalSpacing.copyWith(left: leftIndent),
+      );
+    }
+
     if (controller == null) {
       return const Center(child: CircularProgressIndicator());
     }
     return Column(
       children: [
-        QuillSimpleToolbar(
-          controller: controller,
-          config: const QuillSimpleToolbarConfig(
-            showFontFamily: false,
-            showFontSize: false,
-            showBoldButton: true,
-            showItalicButton: true,
-            showUnderLineButton: true,
-            showStrikeThrough: false,
-            showColorButton: true,
-            showBackgroundColorButton: true,
-            showClearFormat: false,
-            showAlignmentButtons: true,
-            showLeftAlignment: false,
-            showCenterAlignment: true,
-            showRightAlignment: false,
-            showJustifyAlignment: false,
-            showHeaderStyle: true,
-            showListNumbers: true,
-            showListBullets: true,
-            showListCheck: true,
-            showCodeBlock: false,
-            showQuote: false,
-            showIndent: false,
-            showLink: true,
-            showUndo: true,
-            showRedo: true,
-            showDividers: true,
-            showSearchButton: false,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          child: QuillSimpleToolbar(
+            controller: controller,
+            config: const QuillSimpleToolbarConfig(
+              showFontFamily: false,
+              showFontSize: false,
+              showBoldButton: true,
+              showItalicButton: true,
+              showUnderLineButton: true,
+              showStrikeThrough: false,
+              showColorButton: false,
+              showBackgroundColorButton: false,
+              showClearFormat: false,
+              showAlignmentButtons: true,
+              showLeftAlignment: false,
+              showCenterAlignment: true,
+              showRightAlignment: false,
+              showJustifyAlignment: false,
+              showHeaderStyle: true,
+              showListNumbers: true,
+              showListBullets: true,
+              showListCheck: true,
+              showCodeBlock: false,
+              showQuote: false,
+              showIndent: false,
+              showLink: true,
+              showUndo: true,
+              showRedo: true,
+              showDividers: true,
+              showSearchButton: false,
+            ),
           ),
         ),
         const Divider(height: 1),
@@ -278,6 +412,30 @@ class _NoteEditorState extends State<NoteEditor> {
               config: QuillEditorConfig(
                 placeholder: 'Écris ta stratégie...',
                 customStyles: DefaultStyles(
+                  h1: headingStyle(defaultStyles.h1, 0, color: headingColor100),
+                  h2: headingStyle(defaultStyles.h2, 10, color: headingColor80),
+                  h3: headingStyle(defaultStyles.h3, 20, color: headingColor60),
+                  h4: headingStyle(defaultStyles.h4, 30, color: headingColor40),
+                  h5: headingStyle(defaultStyles.h5, 40),
+                  h6: headingStyle(defaultStyles.h6, 50),
+                  lists: defaultListStyle.copyWith(
+                    indentWidthBuilder: (block, buildContext, count, numberPointWidthBuilder) {
+                      final attrs = block.style.attributes;
+                      if (attrs.containsKey(Attribute.list.key) ||
+                          attrs.containsKey(Attribute.blockQuote.key) ||
+                          attrs.containsKey(Attribute.codeBlock.key)) {
+                        return baseIndentWidthBuilder(
+                          block,
+                          buildContext,
+                          count,
+                          numberPointWidthBuilder,
+                        );
+                      }
+
+                      final indentLevel = attrs[Attribute.indent.key]?.value as int? ?? 0;
+                      return HorizontalSpacing(indentLevel * 10, 0);
+                    },
+                  ),
                   link: TextStyle(
                     color: accentColor,
                     decoration: TextDecoration.underline,

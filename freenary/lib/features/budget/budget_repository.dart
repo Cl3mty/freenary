@@ -1,19 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'budget_models.dart';
-
-/// Génère des ids courts type "revenue_ab12cd34", à la manière du code JS
-/// d'origine, pour les items/catégories (l'id du snapshot lui-même utilise
-/// un vrai UUID pour matcher exactement le format du fichier existant).
-String generateItemId(String prefix) {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  final rand = Random();
-  final suffix = List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
-  return '${prefix}_$suffix';
-}
 
 class BudgetRepository {
   final String vaultPath;
@@ -36,23 +25,56 @@ class BudgetRepository {
         .toList();
   }
 
-  /// Charge le dernier snapshot sauvegardé (comportement identique à
-  /// l'ancien /api/budget qui renvoyait `latest`).
-  Future<BudgetData> loadLatest() async {
-    final all = await _readAll();
-    if (all.isEmpty) return BudgetData.empty();
-    return all.last.data;
-  }
-
-  Future<void> save(BudgetData data) async {
+  Future<void> _writeAll(List<BudgetSnapshot> all) async {
     await _ensureDir();
-    final all = await _readAll();
-    all.add(BudgetSnapshot(
-      id: const Uuid().v4(),
-      savedAt: DateTime.now().toUtc(),
-      data: data,
-    ));
     final jsonList = all.map((s) => s.toJson()).toList();
     await _file.writeAsString(const JsonEncoder.withIndent('  ').convert(jsonList));
+  }
+
+  /// Liste tous les budgets sauvegardés, le plus récent en premier.
+  Future<List<BudgetSnapshot>> listAll() async {
+    final all = await _readAll();
+    return all.reversed.toList();
+  }
+
+  Future<BudgetData> loadSnapshot(String id) async {
+    final all = await _readAll();
+    final snap = all.firstWhere((s) => s.id == id, orElse: () => throw StateError('Budget introuvable'));
+    return snap.data;
+  }
+
+  /// Crée un nouveau budget nommé. Retourne son id.
+  Future<String> saveNew(BudgetData data, {String? name}) async {
+    final all = await _readAll();
+    final id = const Uuid().v4();
+    all.add(BudgetSnapshot(id: id, name: name, savedAt: DateTime.now().toUtc(), data: data));
+    await _writeAll(all);
+    return id;
+  }
+
+  /// Met à jour les données d'un budget existant (conserve son nom).
+  Future<void> updateSnapshot(String id, BudgetData data) async {
+    final all = await _readAll();
+    final idx = all.indexWhere((s) => s.id == id);
+    if (idx == -1) {
+      await saveNew(data);
+      return;
+    }
+    all[idx] = BudgetSnapshot(id: id, name: all[idx].name, savedAt: DateTime.now().toUtc(), data: data);
+    await _writeAll(all);
+  }
+
+  Future<void> renameSnapshot(String id, String name) async {
+    final all = await _readAll();
+    final idx = all.indexWhere((s) => s.id == id);
+    if (idx == -1) return;
+    all[idx] = BudgetSnapshot(id: id, name: name, savedAt: all[idx].savedAt, data: all[idx].data);
+    await _writeAll(all);
+  }
+
+  Future<void> deleteSnapshot(String id) async {
+    final all = await _readAll();
+    all.removeWhere((s) => s.id == id);
+    await _writeAll(all);
   }
 }
