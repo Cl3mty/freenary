@@ -8,6 +8,7 @@ import 'app/app_shell.dart';
 import 'features/strategy/strategy_screen.dart';
 import 'package:flutter_quill/flutter_quill.dart' show FlutterQuillLocalizations;
 import 'features/budget/budget_screen.dart';
+import 'features/simulation/simulation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +79,6 @@ class _FreenaryAppState extends State<FreenaryApp> {
       themeMode: _themeController.mode,
       home: _buildHome(),
       localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
-      supportedLocales: FlutterQuillLocalizations.supportedLocales,
     );
   }
 
@@ -110,7 +110,7 @@ class _FreenaryAppState extends State<FreenaryApp> {
         'strategie': (_) => StrategyScreen(vaultPath: _vaultPath!),
         'budget': (_) => BudgetScreen(vaultPath: _vaultPath!),
         'taxation': (_) => const Center(child: Text('Taxation')),
-        'simulation': (_) => const Center(child: Text('Simulation')),
+        'simulation': (_) => const SimulationScreen(),
         'settings': (_) => SettingsScreen(
               vaultFolderService: _vaultFolderService,
               currentVaultPath: _vaultPath!,
