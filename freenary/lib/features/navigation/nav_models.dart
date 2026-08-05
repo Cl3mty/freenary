@@ -30,7 +30,7 @@ const patrimoineGroup = NavGroup(
       icon: LucideIcons.circlePlus,
       children: [
         NavItem(key: 'actifs_actions_fonds', label: 'Actions & Fonds', icon: LucideIcons.chartLine),
-        NavItem(key: 'actifs_startups_pme', label: 'Startups & PME', icon: LucideIcons.rocket),
+        NavItem(key: 'actifs_private_equity', label: 'Private Equity', icon: LucideIcons.rocket),
         NavItem(key: 'actifs_immobilier', label: 'Immobilier', icon: LucideIcons.house),
         NavItem(key: 'actifs_crypto', label: 'Crypto', icon: LucideIcons.bitcoin),
         NavItem(key: 'actifs_metaux_precieux', label: 'Métaux précieux', icon: LucideIcons.gem),

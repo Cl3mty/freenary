@@ -1,39 +1,57 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as p;
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
 
 class VaultFolderService {
-  static const _prefsKey = 'vault_folder_path'; // chemin complet vers .freenary
-  static const _vaultDirName = '.freenary';
+  static const _bookmarkKey = 'vault_folder_bookmark';
+  static const _channel = MethodChannel('com.freenary/secure_bookmarks');
 
+  /// Résout le bookmark sauvegardé, redemande l'accès sécurisé au dossier
+  /// (obligatoire à chaque lancement) et reconstruit le chemin du vault.
   Future<String?> getSavedVaultPath() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_prefsKey);
+    final bookmarkData = prefs.getString(_bookmarkKey);
+    if (bookmarkData == null) return null;
+
+    try {
+      final parentPath = await _channel.invokeMethod<String>(
+        'resolveAndAccess',
+        bookmarkData,
+      );
+      if (parentPath == null) return null;
+      return '$parentPath/.freenary';
+    } catch (e) {
+      // Bookmark invalide/révoqué (ex: dossier déplacé/supprimé) : on force un re-pick.
+      return null;
+    }
   }
 
-  /// Supprime le chemin sauvegardé dans les préférences.
-  Future<void> clearSavedVaultPath() async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.remove(_prefsKey);
-}
+  Future<String?> pickAndCreateVaultFolder({String? dialogTitle}) async {
+    final result = await FilePicker.getDirectoryPath(
+      dialogTitle: dialogTitle,
+    );
+    if (result == null) return null;
 
-  /// Ouvre le picker, crée .freenary dans le dossier choisi si besoin,
-  /// sauvegarde et retourne le chemin complet du dossier de données.
-  Future<String?> pickAndCreateVaultFolder({
-    String dialogTitle = 'Choisis l\'emplacement de tes données Freenary',
-  }) async {
-    final chosen = await FilePicker.getDirectoryPath(dialogTitle: dialogTitle);
-    if (chosen == null) return null;
+    final bookmarkData = await _channel.invokeMethod<String>(
+      'createBookmark',
+      result,
+    );
+    if (bookmarkData == null) return null;
 
-    final vaultPath = p.join(chosen, _vaultDirName);
-    final vaultDir = Directory(vaultPath);
+    final vaultDir = Directory('$result/.freenary');
     if (!await vaultDir.exists()) {
       await vaultDir.create(recursive: true);
     }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, vaultPath);
-    return vaultPath;
+    await prefs.setString(_bookmarkKey, bookmarkData);
+
+    return vaultDir.path;
+  }
+
+  Future<void> clearSavedVaultPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_bookmarkKey);
   }
 }

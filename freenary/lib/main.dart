@@ -5,6 +5,9 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'app/theme_controller.dart';
 import 'app/app_shell.dart';
+import 'features/strategy/strategy_screen.dart';
+import 'package:flutter_quill/flutter_quill.dart' show FlutterQuillLocalizations;
+import 'features/budget/budget_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +77,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
       ),
       themeMode: _themeController.mode,
       home: _buildHome(),
+      localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
+      supportedLocales: FlutterQuillLocalizations.supportedLocales,
     );
   }
 
@@ -94,7 +99,7 @@ class _FreenaryAppState extends State<FreenaryApp> {
       pages: {
         'dashboard': (_) => const Center(child: Text('Tableau de bord')),
         'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
-        'actifs_startups_pme': (_) => const Center(child: Text('Startups & PME')),
+        'actifs_private_equity': (_) => const Center(child: Text('Private Equity')),
         'actifs_immobilier': (_) => const Center(child: Text('Immobilier')),
         'actifs_crypto': (_) => const Center(child: Text('Crypto')),
         'actifs_metaux_precieux': (_) => const Center(child: Text('Métaux précieux')),
@@ -102,8 +107,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
         'actifs_autres': (_) => const Center(child: Text('Autres')),
         'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
         'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
-        'strategie': (_) => const Center(child: Text('Stratégie')),
-        'budget': (_) => const Center(child: Text('Budget')),
+        'strategie': (_) => StrategyScreen(vaultPath: _vaultPath!),
+        'budget': (_) => BudgetScreen(vaultPath: _vaultPath!),
         'taxation': (_) => const Center(child: Text('Taxation')),
         'simulation': (_) => const Center(child: Text('Simulation')),
         'settings': (_) => SettingsScreen(

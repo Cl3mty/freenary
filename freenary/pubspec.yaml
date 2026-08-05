@@ -44,7 +44,15 @@ dependencies:
   shared_preferences: ^2.5.5
   window_manager: ^0.5.2
   shadcn_flutter: ^0.0.53
-
+  flutter_quill: ^11.5.1
+  markdown_quill: ^4.3.0
+  markdown: ^7.3.1
+  flutter_math_fork: ^0.7.4
+  flutter_localizations:
+    sdk: flutter
+  dart_quill_delta: ^10.8.3
+  sankey_flutter: ^0.0.3
+  uuid: ^4.6.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

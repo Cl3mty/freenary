@@ -120,18 +120,22 @@ class _VaultCardState extends State<_VaultCard> {
   String? _error;
 
   Future<void> _changeFolder() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
-        dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
-      );
-      if (path != null) widget.onVaultChanged(path);
-    } catch (e) {
-      setState(() => _error = 'Impossible de changer d\'emplacement : $e');
-    } finally {
-      setState(() => _loading = false);
+  setState(() { _loading = true; _error = null; });
+  try {
+    final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
+      dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
+    );
+    if (path != null) {
+      widget.onVaultChanged(path);
+    } else {
+      setState(() => _error = 'Sélection annulée ou chemin invalide (result == null)');
     }
+  } catch (e) {
+    setState(() => _error = 'Impossible de changer d\'emplacement : $e');
+  } finally {
+    setState(() => _loading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
