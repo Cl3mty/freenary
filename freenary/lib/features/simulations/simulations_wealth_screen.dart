@@ -105,6 +105,64 @@ class _SimulationSplitCard extends StatelessWidget {
   }
 }
 
+class _WealthSimpleDisclaimer extends StatelessWidget {
+  const _WealthSimpleDisclaimer();
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.mutedForeground;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.border),
+        borderRadius: BorderRadius.circular(Theme.of(context).radiusMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(LucideIcons.info, size: 16, color: muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: shadcn.Text(
+              "Projection déterministe indicative fondée sur des rendements constants et une fiscalité simplifiée. "
+              "Les marchés, frais, impôts réels et aléas de vie peuvent modifier significativement les résultats.",
+            ).muted().small(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WealthMonteCarloDisclaimer extends StatelessWidget {
+  const _WealthMonteCarloDisclaimer();
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.mutedForeground;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.border),
+        borderRadius: BorderRadius.circular(Theme.of(context).radiusMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(LucideIcons.info, size: 16, color: muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: shadcn.Text(
+              "Simulation Monte-Carlo indicative: les distributions retenues et hypothèses de volatilité restent simplifiées. "
+              "Les percentiles ne constituent ni une garantie de performance ni une recommandation d'investissement.",
+            ).muted().small(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // =======================================================================
 // Formatage partagé
 // =======================================================================
@@ -621,6 +679,8 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
             _StatColumn(label: 'Revenu mensuel', value: _fmtEuros(result.revenuMensuel)),
           ],
         ),
+        const SizedBox(height: 16),
+        const _WealthSimpleDisclaimer(),
       ],
     );
   }
@@ -1308,6 +1368,8 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
             _StatColumn(label: 'Revenu mensuel médian', value: _fmtEuros(result.revenuMensuelMedian)),
           ],
         ),
+        const SizedBox(height: 16),
+        const _WealthMonteCarloDisclaimer(),
       ],
     );
   }

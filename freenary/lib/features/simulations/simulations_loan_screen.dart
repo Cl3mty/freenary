@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
 
@@ -120,9 +119,6 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
     final deferMonths = (_type == _LoanType.amortissable && _differeActif)
         ? _dureeDiffereMois.clamp(0, totalMonths - 1)
         : 0;
-    final mensualitePrincipale = totalMonths - deferMonths > 0
-        ? months[totalMonths - 1].capital + months[totalMonths - 1].interest + months[totalMonths - 1].insurance
-        : 0.0;
     // Pour un amortissable classique, la mensualité est constante hors dernier mois d'arrondi :
     // on prend plutôt le paiement du premier mois de la phase d'amortissement.
     final mensualiteAffichee = _type == _LoanType.inFine
@@ -406,28 +402,38 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 20),
-        OutlineButton(
-          onPressed: () => _shareResults(result),
-          leading: const Icon(LucideIcons.link),
-          child: const shadcn.Text('Partager les résultats'),
-        ),
+        const SizedBox(height: 16),
+        const _LoanDisclaimer(),
       ],
     );
   }
+}
 
-  void _shareResults(_LoanResult result) {
-    final summary = 'Emprunt de ${_fmtEuros(result.montantEmprunte)} sur $_dureeAnnees ans : '
-        'mensualité ${_fmtEuros(result.mensualite)}, coût total du crédit ${_fmtEuros(result.coutTotalCredit)}.';
-    Clipboard.setData(ClipboardData(text: summary));
-    showToast(
-      context: context,
-      location: ToastLocation.bottomRight,
-      builder: (context, overlay) => SurfaceCard(
-        child: Basic(
-          title: const shadcn.Text('Résumé copié'),
-          subtitle: const shadcn.Text('Le résultat a été copié dans le presse-papiers.'),
-        ),
+class _LoanDisclaimer extends StatelessWidget {
+  const _LoanDisclaimer();
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.mutedForeground;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.border),
+        borderRadius: BorderRadius.circular(Theme.of(context).radiusMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(LucideIcons.info, size: 16, color: muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: shadcn.Text(
+              "Simulation de prêt indicative: les résultats reposent sur des hypothèses simplifiées "
+              "(taux constants, assurance linéaire, frais fixes). Les conditions bancaires réelles, "
+              "garanties et clauses contractuelles peuvent modifier le coût total du crédit.",
+            ).muted().small(),
+          ),
+        ],
       ),
     );
   }
