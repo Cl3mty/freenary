@@ -55,7 +55,15 @@ const outilsGroup = NavGroup(
   items: [
     NavItem(key: 'strategie', label: 'Stratégie', icon: LucideIcons.notebookPen),
     NavItem(key: 'budget', label: 'Budget', icon: LucideIcons.wallet),
-    NavItem(key: 'taxation', label: 'Taxation', icon: LucideIcons.flame),
-    NavItem(key: 'simulation', label: 'Simulation', icon: LucideIcons.trendingUp),
+    NavItem(
+      key: 'simulation',
+      label: 'Simulation',
+      icon: LucideIcons.cpu,
+      children: [
+        NavItem(key: 'simulation_taxation', label: 'Taxation', icon: LucideIcons.flame),
+        NavItem(key: 'simulation_patrimoine', label: 'Patrimoine', icon: LucideIcons.trendingUp),
+        NavItem(key: 'simulation_pret', label: 'Prêt', icon: LucideIcons.handCoins),
+      ],
+    ),
   ],
 );

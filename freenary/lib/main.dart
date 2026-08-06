@@ -109,8 +109,9 @@ class _FreenaryAppState extends State<FreenaryApp> {
         'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
         'strategie': (_) => StrategyScreen(vaultPath: _vaultPath!),
         'budget': (_) => BudgetScreen(vaultPath: _vaultPath!),
-        'taxation': (_) => const Center(child: Text('Taxation')),
-        'simulation': (_) => const SimulationScreen(),
+        'simulation_taxation': (_) => const Center(child: Text('Taxation')),
+        'simulation_patrimoine': (_) => const SimulationScreen(),
+        'simulation_pret': (_) => const Center(child: Text('Prêt')),
         'settings': (_) => SettingsScreen(
               vaultFolderService: _vaultFolderService,
               currentVaultPath: _vaultPath!,

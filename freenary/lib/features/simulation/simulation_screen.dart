@@ -1,5 +1,5 @@
+import 'dart:math';
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
@@ -12,326 +12,99 @@ class SimulationScreen extends StatefulWidget {
 }
 
 class _SimulationScreenState extends State<SimulationScreen> {
-  double _patrimoineActuel = 100000;
-  double _repartitionInitialeBourse = 50;
-  double _investissementsAnnuels = 6000;
-  double _repartitionInvestBourse = 50;
-  int _nombreAnnees = 20;
-  double _rendementBourse = 8;
-  double _rendementAutre = 5;
-  double _impositionBourse = 18.6;
-  double _impositionAutre = 31.4;
-  double _tauxRetrait = 4;
-  double _tauxInflation = 3;
+  int _tabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final result = _compute();
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Card(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 360,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: _buildInputsContent(),
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: TabList(
+              index: _tabIndex,
+              onChanged: (value) => setState(() => _tabIndex = value),
+              children: const [
+                TabItem(child: shadcn.Text('Déterministe (Intérêts composés)')),
+                TabItem(child: shadcn.Text('Stochastique (Monte-Carlo)')),
+              ],
             ),
-            const VerticalDivider(width: 1),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: SingleChildScrollView(
-                  child: _buildResultsContent(result),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _tabIndex == 0 ? const _SimpleSimulationTab() : const _MonteCarloSimulationTab(),
+          ),
+        ],
       ),
     );
   }
+}
 
-  // ---------------------------------------------------------------------
-  // Calcul
-  // ---------------------------------------------------------------------
+class _SimulationSplitCard extends StatelessWidget {
+  final Widget left;
+  final Widget right;
 
-  _SimulationResult _compute() {
-    final initialBourse = _patrimoineActuel * _repartitionInitialeBourse / 100;
-    final initialAutre = _patrimoineActuel * (100 - _repartitionInitialeBourse) / 100;
-    final investBourse = _investissementsAnnuels * _repartitionInvestBourse / 100;
-    final investAutre = _investissementsAnnuels * (100 - _repartitionInvestBourse) / 100;
+  const _SimulationSplitCard({required this.left, required this.right});
 
-    var bourse = initialBourse;
-    var autre = initialAutre;
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 980;
 
-    final points = <_YearPoint>[
-      _YearPoint(year: 0, principal: _patrimoineActuel, total: _patrimoineActuel),
-    ];
+          if (compact) {
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: left,
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: right,
+                  ),
+                ],
+              ),
+            );
+          }
 
-    for (var year = 1; year <= _nombreAnnees; year++) {
-      bourse = bourse * (1 + _rendementBourse / 100) + investBourse;
-      autre = autre * (1 + _rendementAutre / 100) + investAutre;
-      final principal = _patrimoineActuel + _investissementsAnnuels * year;
-      points.add(_YearPoint(year: year, principal: principal, total: bourse + autre));
-    }
-
-    final valeurFuture = bourse + autre;
-    final versements = _investissementsAnnuels * _nombreAnnees;
-    final plusValue = valeurFuture - _patrimoineActuel - versements;
-
-    final contributionsBourse = initialBourse + investBourse * _nombreAnnees;
-    final contributionsAutre = initialAutre + investAutre * _nombreAnnees;
-    final gainsBourse = (bourse - contributionsBourse).clamp(0, double.infinity);
-    final gainsAutre = (autre - contributionsAutre).clamp(0, double.infinity);
-    final taxes = gainsBourse * _impositionBourse / 100 + gainsAutre * _impositionAutre / 100;
-    final valeurNette = valeurFuture - taxes;
-    final revenuMensuel = valeurNette * _tauxRetrait / 100 / 12;
-
-    return _SimulationResult(
-      points: points,
-      patrimoineInitial: _patrimoineActuel,
-      versements: versements,
-      valeurFuture: valeurFuture,
-      plusValue: plusValue,
-      valeurNette: valeurNette,
-      revenuMensuel: revenuMensuel,
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // Colonne de gauche : formulaire
-  // ---------------------------------------------------------------------
-
-  Widget _buildInputsContent() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-          _NumberField(
-            label: 'Patrimoine actuel',
-            suffix: '€',
-            value: _patrimoineActuel,
-            step: 1000,
-            onChanged: (v) => setState(() => _patrimoineActuel = v),
-          ),
-          _SplitSlider(
-            label: 'Répartition de votre patrimoine initial',
-            leftLabel: 'Bourse',
-            rightLabel: 'Autre',
-            value: _repartitionInitialeBourse,
-            onChanged: (v) => setState(() => _repartitionInitialeBourse = v),
-          ),
-          _NumberField(
-            label: 'Investissements annuels',
-            suffix: '€',
-            value: _investissementsAnnuels,
-            step: 500,
-            onChanged: (v) => setState(() => _investissementsAnnuels = v),
-          ),
-          _SplitSlider(
-            label: 'Répartition des investissements',
-            leftLabel: 'Bourse',
-            rightLabel: 'Autre',
-            value: _repartitionInvestBourse,
-            onChanged: (v) => setState(() => _repartitionInvestBourse = v),
-          ),
-          _NumberField(
-            label: "Nombre d'années d'épargne",
-            suffix: 'ans',
-            value: _nombreAnnees.toDouble(),
-            step: 1,
-            decimals: 0,
-            onChanged: (v) => setState(() => _nombreAnnees = v.round().clamp(1, 60)),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: _NumberField(
-                  label: 'Rendement bourse',
-                  suffix: '%',
-                  value: _rendementBourse,
-                  step: 0.5,
-                  decimals: 1,
-                  onChanged: (v) => setState(() => _rendementBourse = v),
+              SizedBox(
+                width: 360,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: SingleChildScrollView(
+                    child: left,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const VerticalDivider(width: 1),
               Expanded(
-                child: _NumberField(
-                  label: 'Rendement autre',
-                  suffix: '%',
-                  value: _rendementAutre,
-                  step: 0.5,
-                  decimals: 1,
-                  onChanged: (v) => setState(() => _rendementAutre = v),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: right,
+                  ),
                 ),
               ),
             ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _NumberField(
-                  label: 'Imposition bourse',
-                  suffix: '%',
-                  value: _impositionBourse,
-                  step: 0.1,
-                  decimals: 1,
-                  onChanged: (v) => setState(() => _impositionBourse = v),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _NumberField(
-                  label: 'Imposition autre',
-                  suffix: '%',
-                  value: _impositionAutre,
-                  step: 0.1,
-                  decimals: 1,
-                  onChanged: (v) => setState(() => _impositionAutre = v),
-                ),
-              ),
-            ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _NumberField(
-                  label: 'Taux de retrait',
-                  suffix: '%',
-                  value: _tauxRetrait,
-                  step: 0.5,
-                  decimals: 1,
-                  onChanged: (v) => setState(() => _tauxRetrait = v),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _NumberField(
-                  label: "Taux d'inflation",
-                  suffix: '%',
-                  value: _tauxInflation,
-                  step: 0.5,
-                  decimals: 1,
-                  onChanged: (v) => setState(() => _tauxInflation = v),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // Colonne de droite : résultats
-  // ---------------------------------------------------------------------
-
-  Widget _buildResultsContent(_SimulationResult result) {
-    final accent = Theme.of(context).colorScheme.primary;
-    final blue = const Color(0xFF7B8FE8);
-    final grey = const Color(0xFF6B7280);
-
-    return Column(
-      children: [
-          shadcn.Text('Valeur nette dans $_nombreAnnees ans').muted(),
-          const SizedBox(height: 8),
-          shadcn.Text(
-            _fmtEuros(result.valeurNette),
-            style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          shadcn.Text.rich(
-            TextSpan(
-              style: DefaultTextStyle.of(context).style,
-              children: [
-                const TextSpan(text: "soit un revenu passif d'environ "),
-                TextSpan(
-                  text: '${_fmtEuros(result.revenuMensuel)} / mois',
-                  style: TextStyle(color: accent, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ).muted(),
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _LegendPill(color: grey, label: 'Patrimoine initial', value: _fmtEuros(result.patrimoineInitial)),
-              _LegendPill(color: blue, label: 'Versements', value: _fmtEuros(result.versements)),
-              _LegendPill(color: accent, label: 'Intérêts nets', value: _fmtEuros(result.plusValue)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 320,
-            child: _ProjectionChart(
-              points: result.points,
-              nombreAnnees: _nombreAnnees,
-              patrimoineInitial: result.patrimoineInitial,
-              blue: blue,
-              gold: accent,
-              grey: grey,
-              textColor: Theme.of(context).colorScheme.mutedForeground,
-              gridColor: Theme.of(context).colorScheme.border,
-              cardColor: Theme.of(context).colorScheme.popover,
-              foregroundColor: Theme.of(context).colorScheme.foreground,
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _StatColumn(label: 'Valeur future', value: _fmtEuros(result.valeurFuture)),
-              _StatColumn(label: 'Dont plus-value', value: _fmtEuros(result.plusValue)),
-              _StatColumn(label: 'Valeur nette', value: _fmtEuros(result.valeurNette)),
-              _StatColumn(label: 'Revenu mensuel', value: _fmtEuros(result.revenuMensuel)),
-            ],
-          ),
-      ],
+          );
+        },
+      ),
     );
   }
 }
 
-// ---------------------------------------------------------------------
-// Modèles
-// ---------------------------------------------------------------------
-
-class _YearPoint {
-  final int year;
-  final double principal;
-  final double total;
-  _YearPoint({required this.year, required this.principal, required this.total});
-}
-
-class _SimulationResult {
-  final List<_YearPoint> points;
-  final double patrimoineInitial;
-  final double versements;
-  final double valeurFuture;
-  final double plusValue;
-  final double valeurNette;
-  final double revenuMensuel;
-
-  _SimulationResult({
-    required this.points,
-    required this.patrimoineInitial,
-    required this.versements,
-    required this.valeurFuture,
-    required this.plusValue,
-    required this.valeurNette,
-    required this.revenuMensuel,
-  });
-}
+// =======================================================================
+// Formatage partagé
+// =======================================================================
 
 String _fmtEuros(double value) {
   final rounded = value.round();
@@ -345,9 +118,36 @@ String _fmtEuros(double value) {
   return '${negative ? '-' : ''}${buffer.toString()} €';
 }
 
-// ---------------------------------------------------------------------
-// Champ numérique avec suffixe et boutons +/-
-// ---------------------------------------------------------------------
+double _gaussian(Random rng, double mean, double stddev) {
+  final u1 = rng.nextDouble().clamp(1e-9, 1.0);
+  final u2 = rng.nextDouble();
+  final z0 = sqrt(-2 * log(u1)) * cos(2 * pi * u2);
+  return mean + z0 * stddev;
+}
+
+double _niceCeil(double value) {
+  if (value <= 0) return 100;
+  var magnitude = 1.0;
+  while (magnitude * 10 <= value) {
+    magnitude *= 10;
+  }
+  final normalized = value / magnitude;
+  double niceNormalized;
+  if (normalized <= 1) {
+    niceNormalized = 1;
+  } else if (normalized <= 2) {
+    niceNormalized = 2;
+  } else if (normalized <= 5) {
+    niceNormalized = 5;
+  } else {
+    niceNormalized = 10;
+  }
+  return niceNormalized * magnitude;
+}
+
+// =======================================================================
+// Champ numérique et slider partagés par les deux onglets
+// =======================================================================
 
 class _NumberField extends StatelessWidget {
   final String label;
@@ -414,10 +214,6 @@ class _NumberField extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------
-// Slider de répartition Bourse / Autre
-// ---------------------------------------------------------------------
 
 class _SplitSlider extends StatelessWidget {
   final String label;
@@ -513,10 +309,6 @@ class _SplitSlider extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------
-// Pastille de légende
-// ---------------------------------------------------------------------
-
 class _LegendPill extends StatelessWidget {
   final Color color;
   final String label;
@@ -545,10 +337,6 @@ class _LegendPill extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------
-// Colonne de stat en bas
-// ---------------------------------------------------------------------
-
 class _StatColumn extends StatelessWidget {
   final String label;
   final String value;
@@ -568,9 +356,299 @@ class _StatColumn extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------
-// Graphique interactif (aires empilées + tooltip au survol)
-// ---------------------------------------------------------------------
+// =======================================================================
+// ONGLET 1 : Simple (intérêts composés)
+// =======================================================================
+
+class _SimpleSimulationTab extends StatefulWidget {
+  const _SimpleSimulationTab();
+
+  @override
+  State<_SimpleSimulationTab> createState() => _SimpleSimulationTabState();
+}
+
+class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
+  double _patrimoineActuel = 100000;
+  double _repartitionInitialeBourse = 50;
+  double _investissementsAnnuels = 6000;
+  double _repartitionInvestBourse = 50;
+  int _nombreAnnees = 20;
+  double _rendementBourse = 8;
+  double _rendementAutre = 5;
+  double _impositionBourse = 18.6;
+  double _impositionAutre = 31.4;
+  double _tauxRetrait = 4;
+  double _tauxInflation = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final result = _compute();
+    return _SimulationSplitCard(
+      left: _buildInputsContent(),
+      right: _buildResultsContent(result),
+    );
+  }
+
+  _SimulationResult _compute() {
+    final initialBourse = _patrimoineActuel * _repartitionInitialeBourse / 100;
+    final initialAutre = _patrimoineActuel * (100 - _repartitionInitialeBourse) / 100;
+    final investBourse = _investissementsAnnuels * _repartitionInvestBourse / 100;
+    final investAutre = _investissementsAnnuels * (100 - _repartitionInvestBourse) / 100;
+
+    var bourse = initialBourse;
+    var autre = initialAutre;
+
+    final points = <_YearPoint>[
+      _YearPoint(year: 0, principal: _patrimoineActuel, total: _patrimoineActuel),
+    ];
+
+    for (var year = 1; year <= _nombreAnnees; year++) {
+      bourse = bourse * (1 + _rendementBourse / 100) + investBourse;
+      autre = autre * (1 + _rendementAutre / 100) + investAutre;
+      final principal = _patrimoineActuel + _investissementsAnnuels * year;
+      points.add(_YearPoint(year: year, principal: principal, total: bourse + autre));
+    }
+
+    final valeurFuture = bourse + autre;
+    final versements = _investissementsAnnuels * _nombreAnnees;
+    final plusValue = valeurFuture - _patrimoineActuel - versements;
+
+    final contributionsBourse = initialBourse + investBourse * _nombreAnnees;
+    final contributionsAutre = initialAutre + investAutre * _nombreAnnees;
+    final gainsBourse = (bourse - contributionsBourse).clamp(0, double.infinity);
+    final gainsAutre = (autre - contributionsAutre).clamp(0, double.infinity);
+    final taxes = gainsBourse * _impositionBourse / 100 + gainsAutre * _impositionAutre / 100;
+    final valeurNette = valeurFuture - taxes;
+    final revenuMensuel = valeurNette * _tauxRetrait / 100 / 12;
+
+    return _SimulationResult(
+      points: points,
+      patrimoineInitial: _patrimoineActuel,
+      versements: versements,
+      valeurFuture: valeurFuture,
+      plusValue: plusValue,
+      valeurNette: valeurNette,
+      revenuMensuel: revenuMensuel,
+    );
+  }
+
+  Widget _buildInputsContent() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _NumberField(
+          label: 'Patrimoine actuel',
+          suffix: '€',
+          value: _patrimoineActuel,
+          step: 1000,
+          onChanged: (v) => setState(() => _patrimoineActuel = v),
+        ),
+        _SplitSlider(
+          label: 'Répartition de votre patrimoine initial',
+          leftLabel: 'Bourse',
+          rightLabel: 'Autre',
+          value: _repartitionInitialeBourse,
+          onChanged: (v) => setState(() => _repartitionInitialeBourse = v),
+        ),
+        _NumberField(
+          label: 'Investissements annuels',
+          suffix: '€',
+          value: _investissementsAnnuels,
+          step: 500,
+          onChanged: (v) => setState(() => _investissementsAnnuels = v),
+        ),
+        _SplitSlider(
+          label: 'Répartition des investissements',
+          leftLabel: 'Bourse',
+          rightLabel: 'Autre',
+          value: _repartitionInvestBourse,
+          onChanged: (v) => setState(() => _repartitionInvestBourse = v),
+        ),
+        _NumberField(
+          label: "Nombre d'années d'épargne",
+          suffix: 'ans',
+          value: _nombreAnnees.toDouble(),
+          step: 1,
+          decimals: 0,
+          onChanged: (v) => setState(() => _nombreAnnees = v.round().clamp(1, 60)),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Rendement bourse',
+                suffix: '%',
+                value: _rendementBourse,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _rendementBourse = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: 'Rendement autre',
+                suffix: '%',
+                value: _rendementAutre,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _rendementAutre = v),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Imposition bourse',
+                suffix: '%',
+                value: _impositionBourse,
+                step: 0.1,
+                decimals: 1,
+                onChanged: (v) => setState(() => _impositionBourse = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: 'Imposition autre',
+                suffix: '%',
+                value: _impositionAutre,
+                step: 0.1,
+                decimals: 1,
+                onChanged: (v) => setState(() => _impositionAutre = v),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Taux de retrait',
+                suffix: '%',
+                value: _tauxRetrait,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _tauxRetrait = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: "Taux d'inflation",
+                suffix: '%',
+                value: _tauxInflation,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _tauxInflation = v),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResultsContent(_SimulationResult result) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final blue = const Color(0xFF7B8FE8);
+    final grey = const Color(0xFF6B7280);
+
+    return Column(
+      children: [
+        shadcn.Text('Valeur nette dans $_nombreAnnees ans').muted(),
+        const SizedBox(height: 8),
+        shadcn.Text(
+          _fmtEuros(result.valeurNette),
+          style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        shadcn.Text.rich(
+          TextSpan(
+            style: DefaultTextStyle.of(context).style,
+            children: [
+              const TextSpan(text: "soit un revenu passif d'environ "),
+              TextSpan(
+                text: '${_fmtEuros(result.revenuMensuel)} / mois',
+                style: TextStyle(color: accent, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ).muted(),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _LegendPill(color: grey, label: 'Patrimoine initial', value: _fmtEuros(result.patrimoineInitial)),
+            _LegendPill(color: blue, label: 'Versements', value: _fmtEuros(result.versements)),
+            _LegendPill(color: accent, label: 'Intérêts nets', value: _fmtEuros(result.plusValue)),
+          ],
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 320,
+          child: _ProjectionChart(
+            points: result.points,
+            nombreAnnees: _nombreAnnees,
+            patrimoineInitial: result.patrimoineInitial,
+            blue: blue,
+            gold: accent,
+            grey: grey,
+            textColor: Theme.of(context).colorScheme.mutedForeground,
+            gridColor: Theme.of(context).colorScheme.border,
+            cardColor: Theme.of(context).colorScheme.popover,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _StatColumn(label: 'Valeur future', value: _fmtEuros(result.valeurFuture)),
+            _StatColumn(label: 'Dont plus-value', value: _fmtEuros(result.plusValue)),
+            _StatColumn(label: 'Valeur nette', value: _fmtEuros(result.valeurNette)),
+            _StatColumn(label: 'Revenu mensuel', value: _fmtEuros(result.revenuMensuel)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _YearPoint {
+  final int year;
+  final double principal;
+  final double total;
+  _YearPoint({required this.year, required this.principal, required this.total});
+}
+
+class _SimulationResult {
+  final List<_YearPoint> points;
+  final double patrimoineInitial;
+  final double versements;
+  final double valeurFuture;
+  final double plusValue;
+  final double valeurNette;
+  final double revenuMensuel;
+
+  _SimulationResult({
+    required this.points,
+    required this.patrimoineInitial,
+    required this.versements,
+    required this.valeurFuture,
+    required this.plusValue,
+    required this.valeurNette,
+    required this.revenuMensuel,
+  });
+}
 
 class _ProjectionChart extends StatefulWidget {
   final List<_YearPoint> points;
@@ -582,7 +660,6 @@ class _ProjectionChart extends StatefulWidget {
   final Color textColor;
   final Color gridColor;
   final Color cardColor;
-  final Color foregroundColor;
 
   const _ProjectionChart({
     required this.points,
@@ -594,7 +671,6 @@ class _ProjectionChart extends StatefulWidget {
     required this.textColor,
     required this.gridColor,
     required this.cardColor,
-    required this.foregroundColor,
   });
 
   @override
@@ -625,9 +701,7 @@ class _ProjectionChartState extends State<_ProjectionChart> {
         double xFor(int year) => _leftAxisWidth + chartWidth * (year / widget.nombreAnnees);
 
         _YearPoint? hoveredPoint;
-        if (_hoveredYear != null) {
-          hoveredPoint = widget.points[_hoveredYear!];
-        }
+        if (_hoveredYear != null) hoveredPoint = widget.points[_hoveredYear!];
 
         return MouseRegion(
           onHover: (event) => _updateHover(event.localPosition, width),
@@ -670,7 +744,6 @@ class _ProjectionChartState extends State<_ProjectionChart> {
       },
     );
   }
-
 }
 
 class _HoverTooltip extends StatelessWidget {
@@ -797,7 +870,6 @@ class _ProjectionChartPainter extends CustomPainter {
 
     final baselineY = yFor(patrimoineInitial);
 
-    // Gris: uniquement la zone sous la baseline (patrimoine initial).
     final baselineAreaPath = Path()
       ..moveTo(xFor(0), baselineY)
       ..lineTo(xFor(nombreAnnees), baselineY)
@@ -806,7 +878,6 @@ class _ProjectionChartPainter extends CustomPainter {
       ..close();
     canvas.drawPath(baselineAreaPath, Paint()..color = grey.withValues(alpha: 0.15));
 
-    // Bleu: uniquement la zone entre la courbe principale et la baseline grise.
     final principalBandPath = Path()..moveTo(xFor(0), baselineY);
     for (final p in points) {
       principalBandPath.lineTo(xFor(p.year), yFor(p.principal));
@@ -852,7 +923,6 @@ class _ProjectionChartPainter extends CustomPainter {
       final p = points[hoveredYear!];
       final x = xFor(hoveredYear!);
       _drawDashedLine(canvas, Offset(x, 0), Offset(x, chartHeight), gridColor);
-
       _drawDot(canvas, Offset(x, yFor(p.total)), gold);
       _drawDot(canvas, Offset(x, yFor(p.principal)), blue);
       _drawDot(canvas, Offset(x, baselineY), grey);
@@ -910,27 +980,716 @@ class _ProjectionChartPainter extends CustomPainter {
     return '${v.round()} €';
   }
 
-  double _niceCeil(double value) {
-    if (value <= 0) return 100;
-    var magnitude = 1.0;
-    while (magnitude * 10 <= value) {
-      magnitude *= 10;
+  @override
+  bool shouldRepaint(covariant _ProjectionChartPainter oldDelegate) =>
+      oldDelegate.hoveredYear != hoveredYear || oldDelegate.points != points;
+}
+
+// =======================================================================
+// ONGLET 2 : Personnalisé (Monte-Carlo)
+// =======================================================================
+
+class _MonteCarloSimulationTab extends StatefulWidget {
+  const _MonteCarloSimulationTab();
+
+  @override
+  State<_MonteCarloSimulationTab> createState() => _MonteCarloSimulationTabState();
+}
+
+class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
+  double _patrimoineActuel = 100000;
+  double _repartitionInitialeBourse = 50;
+  double _investissementsAnnuels = 6000;
+  double _repartitionInvestBourse = 50;
+  int _nombreAnnees = 20;
+  double _rendementBourse = 8;
+  double _ecartTypeBourse = 15;
+  double _rendementAutre = 5;
+  double _ecartTypeAutre = 4;
+  double _impositionBourse = 18.6;
+  double _impositionAutre = 31.4;
+  double _tauxRetrait = 4;
+  int _nombreSimulations = 300;
+
+  @override
+  Widget build(BuildContext context) {
+    final result = _compute();
+    return _SimulationSplitCard(
+      left: _buildInputsContent(),
+      right: _buildResultsContent(result),
+    );
+  }
+
+  _MCResult _compute() {
+    final rng = Random(12345); // seed fixe : la courbe ne bouge que si les paramètres changent
+    final initialBourse = _patrimoineActuel * _repartitionInitialeBourse / 100;
+    final initialAutre = _patrimoineActuel * (100 - _repartitionInitialeBourse) / 100;
+    final investBourse = _investissementsAnnuels * _repartitionInvestBourse / 100;
+    final investAutre = _investissementsAnnuels * (100 - _repartitionInvestBourse) / 100;
+
+    final nSims = _nombreSimulations;
+    final totalsByYear = List.generate(_nombreAnnees + 1, (_) => <double>[]);
+    final netValues = <double>[];
+
+    for (var s = 0; s < nSims; s++) {
+      var bourse = initialBourse;
+      var autre = initialAutre;
+      totalsByYear[0].add(_patrimoineActuel);
+      for (var year = 1; year <= _nombreAnnees; year++) {
+        final rBourse = _gaussian(rng, _rendementBourse, _ecartTypeBourse);
+        final rAutre = _gaussian(rng, _rendementAutre, _ecartTypeAutre);
+        bourse = bourse * (1 + rBourse / 100) + investBourse;
+        autre = autre * (1 + rAutre / 100) + investAutre;
+        totalsByYear[year].add(bourse + autre);
+      }
+      final contributionsBourse = initialBourse + investBourse * _nombreAnnees;
+      final contributionsAutre = initialAutre + investAutre * _nombreAnnees;
+      final gainsBourse = (bourse - contributionsBourse).clamp(0, double.infinity);
+      final gainsAutre = (autre - contributionsAutre).clamp(0, double.infinity);
+      final taxes = gainsBourse * _impositionBourse / 100 + gainsAutre * _impositionAutre / 100;
+      netValues.add((bourse + autre) - taxes);
     }
-    final normalized = value / magnitude;
-    double niceNormalized;
-    if (normalized <= 1) {
-      niceNormalized = 1;
-    } else if (normalized <= 2) {
-      niceNormalized = 2;
-    } else if (normalized <= 5) {
-      niceNormalized = 5;
-    } else {
-      niceNormalized = 10;
+
+    double percentile(List<double> sorted, double p) {
+      final idx = ((sorted.length - 1) * p).round().clamp(0, sorted.length - 1);
+      return sorted[idx];
     }
-    return niceNormalized * magnitude;
+
+    final points = <_MCYearPoint>[];
+    for (var year = 0; year <= _nombreAnnees; year++) {
+      final sorted = [...totalsByYear[year]]..sort();
+      points.add(_MCYearPoint(
+        year: year,
+        principal: _patrimoineActuel + _investissementsAnnuels * year,
+        p10: percentile(sorted, 0.10),
+        p50: percentile(sorted, 0.50),
+        p90: percentile(sorted, 0.90),
+      ));
+    }
+
+    final sortedNet = [...netValues]..sort();
+    final valeurNetteMediane = percentile(sortedNet, 0.50);
+    final valeurNetteP10 = percentile(sortedNet, 0.10);
+    final valeurNetteP90 = percentile(sortedNet, 0.90);
+    final versements = _investissementsAnnuels * _nombreAnnees;
+    final valeurFutureMediane = points.last.p50;
+    final plusValueMediane = valeurFutureMediane - _patrimoineActuel - versements;
+    final revenuMensuelMedian = valeurNetteMediane * _tauxRetrait / 100 / 12;
+
+    return _MCResult(
+      points: points,
+      patrimoineInitial: _patrimoineActuel,
+      versements: versements,
+      valeurFutureMediane: valeurFutureMediane,
+      plusValueMediane: plusValueMediane,
+      valeurNetteMediane: valeurNetteMediane,
+      revenuMensuelMedian: revenuMensuelMedian,
+      valeurNetteP10: valeurNetteP10,
+      valeurNetteP90: valeurNetteP90,
+    );
+  }
+
+  Widget _buildInputsContent() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _NumberField(
+          label: 'Patrimoine actuel',
+          suffix: '€',
+          value: _patrimoineActuel,
+          step: 1000,
+          onChanged: (v) => setState(() => _patrimoineActuel = v),
+        ),
+        _SplitSlider(
+          label: 'Répartition de votre patrimoine initial',
+          leftLabel: 'Bourse',
+          rightLabel: 'Autre',
+          value: _repartitionInitialeBourse,
+          onChanged: (v) => setState(() => _repartitionInitialeBourse = v),
+        ),
+        _NumberField(
+          label: 'Investissements annuels',
+          suffix: '€',
+          value: _investissementsAnnuels,
+          step: 500,
+          onChanged: (v) => setState(() => _investissementsAnnuels = v),
+        ),
+        _SplitSlider(
+          label: 'Répartition des investissements',
+          leftLabel: 'Bourse',
+          rightLabel: 'Autre',
+          value: _repartitionInvestBourse,
+          onChanged: (v) => setState(() => _repartitionInvestBourse = v),
+        ),
+        _NumberField(
+          label: "Nombre d'années d'épargne",
+          suffix: 'ans',
+          value: _nombreAnnees.toDouble(),
+          step: 1,
+          decimals: 0,
+          onChanged: (v) => setState(() => _nombreAnnees = v.round().clamp(1, 60)),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Rendement moyen bourse',
+                suffix: '%',
+                value: _rendementBourse,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _rendementBourse = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: 'Écart-type bourse',
+                suffix: '%',
+                value: _ecartTypeBourse,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _ecartTypeBourse = v),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Rendement moyen autre',
+                suffix: '%',
+                value: _rendementAutre,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _rendementAutre = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: 'Écart-type autre',
+                suffix: '%',
+                value: _ecartTypeAutre,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _ecartTypeAutre = v),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Imposition bourse',
+                suffix: '%',
+                value: _impositionBourse,
+                step: 0.1,
+                decimals: 1,
+                onChanged: (v) => setState(() => _impositionBourse = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: 'Imposition autre',
+                suffix: '%',
+                value: _impositionAutre,
+                step: 0.1,
+                decimals: 1,
+                onChanged: (v) => setState(() => _impositionAutre = v),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _NumberField(
+                label: 'Taux de retrait',
+                suffix: '%',
+                value: _tauxRetrait,
+                step: 0.5,
+                decimals: 1,
+                onChanged: (v) => setState(() => _tauxRetrait = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                label: 'Nombre de simulations',
+                suffix: '',
+                value: _nombreSimulations.toDouble(),
+                step: 50,
+                decimals: 0,
+                onChanged: (v) => setState(() => _nombreSimulations = v.round().clamp(50, 2000)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResultsContent(_MCResult result) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final blue = const Color(0xFF7B8FE8);
+    final grey = const Color(0xFF6B7280);
+
+    return Column(
+      children: [
+        shadcn.Text('Valeur nette médiane dans $_nombreAnnees ans').muted(),
+        const SizedBox(height: 8),
+        shadcn.Text(
+          _fmtEuros(result.valeurNetteMediane),
+          style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        shadcn.Text.rich(
+          TextSpan(
+            style: DefaultTextStyle.of(context).style,
+            children: [
+              const TextSpan(text: "soit un revenu passif médian d'environ "),
+              TextSpan(
+                text: '${_fmtEuros(result.revenuMensuelMedian)} / mois',
+                style: TextStyle(color: accent, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ).muted(),
+        const SizedBox(height: 4),
+        shadcn.Text(
+          'Entre ${_fmtEuros(result.valeurNetteP10)} et ${_fmtEuros(result.valeurNetteP90)} selon les scénarios (10e-90e percentile)',
+        ).muted().small(),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _LegendPill(color: grey, label: 'Patrimoine initial', value: _fmtEuros(result.patrimoineInitial)),
+            _LegendPill(color: blue, label: 'Versements', value: _fmtEuros(result.versements)),
+            _LegendPill(color: accent, label: 'Médiane (intérêts nets)', value: _fmtEuros(result.plusValueMediane)),
+          ],
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 320,
+          child: _MonteCarloChart(
+            points: result.points,
+            nombreAnnees: _nombreAnnees,
+            patrimoineInitial: result.patrimoineInitial,
+            blue: blue,
+            gold: accent,
+            grey: grey,
+            textColor: Theme.of(context).colorScheme.mutedForeground,
+            gridColor: Theme.of(context).colorScheme.border,
+            cardColor: Theme.of(context).colorScheme.popover,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _StatColumn(label: 'Valeur future médiane', value: _fmtEuros(result.valeurFutureMediane)),
+            _StatColumn(label: 'Dont plus-value médiane', value: _fmtEuros(result.plusValueMediane)),
+            _StatColumn(label: 'Valeur nette médiane', value: _fmtEuros(result.valeurNetteMediane)),
+            _StatColumn(label: 'Revenu mensuel médian', value: _fmtEuros(result.revenuMensuelMedian)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MCYearPoint {
+  final int year;
+  final double principal;
+  final double p10;
+  final double p50;
+  final double p90;
+  _MCYearPoint({
+    required this.year,
+    required this.principal,
+    required this.p10,
+    required this.p50,
+    required this.p90,
+  });
+}
+
+class _MCResult {
+  final List<_MCYearPoint> points;
+  final double patrimoineInitial;
+  final double versements;
+  final double valeurFutureMediane;
+  final double plusValueMediane;
+  final double valeurNetteMediane;
+  final double revenuMensuelMedian;
+  final double valeurNetteP10;
+  final double valeurNetteP90;
+
+  _MCResult({
+    required this.points,
+    required this.patrimoineInitial,
+    required this.versements,
+    required this.valeurFutureMediane,
+    required this.plusValueMediane,
+    required this.valeurNetteMediane,
+    required this.revenuMensuelMedian,
+    required this.valeurNetteP10,
+    required this.valeurNetteP90,
+  });
+}
+
+class _MonteCarloChart extends StatefulWidget {
+  final List<_MCYearPoint> points;
+  final int nombreAnnees;
+  final double patrimoineInitial;
+  final Color blue;
+  final Color gold;
+  final Color grey;
+  final Color textColor;
+  final Color gridColor;
+  final Color cardColor;
+
+  const _MonteCarloChart({
+    required this.points,
+    required this.nombreAnnees,
+    required this.patrimoineInitial,
+    required this.blue,
+    required this.gold,
+    required this.grey,
+    required this.textColor,
+    required this.gridColor,
+    required this.cardColor,
+  });
+
+  @override
+  State<_MonteCarloChart> createState() => _MonteCarloChartState();
+}
+
+class _MonteCarloChartState extends State<_MonteCarloChart> {
+  int? _hoveredYear;
+
+  static const double _leftAxisWidth = 60;
+  static const double _bottomAxisHeight = 24;
+
+  void _updateHover(Offset localPosition, double width) {
+    final chartWidth = width - _leftAxisWidth;
+    final fraction = ((localPosition.dx - _leftAxisWidth) / chartWidth).clamp(0.0, 1.0);
+    final year = (fraction * widget.nombreAnnees).round().clamp(0, widget.nombreAnnees);
+    if (year != _hoveredYear) setState(() => _hoveredYear = year);
   }
 
   @override
-  bool shouldRepaint(covariant _ProjectionChartPainter oldDelegate) =>
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final chartWidth = width - _leftAxisWidth;
+        final chartHeight = height - _bottomAxisHeight;
+        double xFor(int year) => _leftAxisWidth + chartWidth * (year / widget.nombreAnnees);
+
+        _MCYearPoint? hoveredPoint;
+        if (_hoveredYear != null) hoveredPoint = widget.points[_hoveredYear!];
+
+        return MouseRegion(
+          onHover: (event) => _updateHover(event.localPosition, width),
+          onExit: (_) => setState(() => _hoveredYear = null),
+          child: Stack(
+            children: [
+              CustomPaint(
+                size: Size(width, height),
+                painter: _MonteCarloChartPainter(
+                  points: widget.points,
+                  nombreAnnees: widget.nombreAnnees,
+                  patrimoineInitial: widget.patrimoineInitial,
+                  blue: widget.blue,
+                  gold: widget.gold,
+                  grey: widget.grey,
+                  textColor: widget.textColor,
+                  gridColor: widget.gridColor,
+                  hoveredYear: _hoveredYear,
+                ),
+              ),
+              if (hoveredPoint != null)
+                Positioned(
+                  left: (xFor(_hoveredYear!) - 150).clamp(_leftAxisWidth, width - 300),
+                  top: (chartHeight / 2 - 100).clamp(0, chartHeight - 200),
+                  child: _MCHoverTooltip(
+                    year: _hoveredYear!,
+                    p10: hoveredPoint.p10,
+                    p50: hoveredPoint.p50,
+                    p90: hoveredPoint.p90,
+                    versements: hoveredPoint.principal - widget.patrimoineInitial,
+                    patrimoineInitial: widget.patrimoineInitial,
+                    blue: widget.blue,
+                    gold: widget.gold,
+                    grey: widget.grey,
+                    cardColor: widget.cardColor,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MCHoverTooltip extends StatelessWidget {
+  final int year;
+  final double p10;
+  final double p50;
+  final double p90;
+  final double versements;
+  final double patrimoineInitial;
+  final Color blue;
+  final Color gold;
+  final Color grey;
+  final Color cardColor;
+
+  const _MCHoverTooltip({
+    required this.year,
+    required this.p10,
+    required this.p50,
+    required this.p90,
+    required this.versements,
+    required this.patrimoineInitial,
+    required this.blue,
+    required this.gold,
+    required this.grey,
+    required this.cardColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            width: 300,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                shadcn.Text(year == 0 ? "Aujourd'hui" : 'Dans $year ans').muted(),
+                const SizedBox(height: 4),
+                shadcn.Text(_fmtEuros(p50), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                shadcn.Text('Médiane').muted().small(),
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                _row('90e percentile', p90, gold),
+                const SizedBox(height: 6),
+                _row('10e percentile', p10, gold.withValues(alpha: 0.5)),
+                const SizedBox(height: 6),
+                _row('Versements', versements, blue),
+                const SizedBox(height: 6),
+                _row('Patrimoine initial', patrimoineInitial, grey),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, double value, Color color) {
+    return Row(
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+        Expanded(child: shadcn.Text(label)),
+        shadcn.Text(_fmtEuros(value), style: const TextStyle(fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+class _MonteCarloChartPainter extends CustomPainter {
+  final List<_MCYearPoint> points;
+  final int nombreAnnees;
+  final double patrimoineInitial;
+  final Color blue;
+  final Color gold;
+  final Color grey;
+  final Color textColor;
+  final Color gridColor;
+  final int? hoveredYear;
+
+  _MonteCarloChartPainter({
+    required this.points,
+    required this.nombreAnnees,
+    required this.patrimoineInitial,
+    required this.blue,
+    required this.gold,
+    required this.grey,
+    required this.textColor,
+    required this.gridColor,
+    required this.hoveredYear,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const leftAxisWidth = 60.0;
+    const bottomAxisHeight = 24.0;
+    final chartWidth = size.width - leftAxisWidth;
+    final chartHeight = size.height - bottomAxisHeight;
+
+    final maxValue = points.map((p) => p.p90).reduce((a, b) => a > b ? a : b);
+    final axisMax = _niceCeil(maxValue * 1.15);
+    const gridLines = 4;
+    final step = axisMax / gridLines;
+
+    double xFor(int year) => leftAxisWidth + chartWidth * (year / nombreAnnees);
+    double yFor(double value) => chartHeight - (value / axisMax) * chartHeight;
+
+    for (var i = 0; i <= gridLines; i++) {
+      final v = step * i;
+      final y = yFor(v);
+      canvas.drawLine(Offset(leftAxisWidth, y), Offset(size.width, y), Paint()
+        ..color = gridColor.withValues(alpha: 0.4)
+        ..strokeWidth = 1);
+      final tp = TextPainter(
+        text: TextSpan(text: _fmtAxis(v), style: TextStyle(color: textColor, fontSize: 11)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(leftAxisWidth - tp.width - 8, y - tp.height / 2));
+    }
+
+    final baselineY = yFor(patrimoineInitial);
+
+    // Aire grise sous "Patrimoine initial".
+    final baselineAreaPath = Path()
+      ..moveTo(xFor(0), baselineY)
+      ..lineTo(xFor(nombreAnnees), baselineY)
+      ..lineTo(xFor(nombreAnnees), chartHeight)
+      ..lineTo(xFor(0), chartHeight)
+      ..close();
+    canvas.drawPath(baselineAreaPath, Paint()..color = grey.withValues(alpha: 0.15));
+
+    // Aire bleue : entre "Patrimoine initial" et "Versements cumulés".
+    final principalBandPath = Path()..moveTo(xFor(0), baselineY);
+    for (final p in points) {
+      principalBandPath.lineTo(xFor(p.year), yFor(p.principal));
+    }
+    principalBandPath
+      ..lineTo(xFor(nombreAnnees), baselineY)
+      ..close();
+    canvas.drawPath(principalBandPath, Paint()..color = blue.withValues(alpha: 0.15));
+
+    // Bande d'incertitude p10-p90 (au-dessus des versements cumulés).
+    final bandPath = Path()..moveTo(xFor(0), yFor(points.first.p10));
+    for (final p in points) {
+      bandPath.lineTo(xFor(p.year), yFor(p.p90));
+    }
+    for (var i = points.length - 1; i >= 0; i--) {
+      bandPath.lineTo(xFor(points[i].year), yFor(points[i].p10));
+    }
+    bandPath.close();
+    canvas.drawPath(bandPath, Paint()..color = gold.withValues(alpha: 0.18));
+
+    canvas.drawLine(Offset(leftAxisWidth, baselineY), Offset(size.width, baselineY), Paint()
+      ..color = grey.withValues(alpha: 0.6)
+      ..strokeWidth = 1.5);
+
+    final bluePath = Path()..moveTo(xFor(0), yFor(points.first.principal));
+    for (final p in points) {
+      bluePath.lineTo(xFor(p.year), yFor(p.principal));
+    }
+    canvas.drawPath(bluePath, Paint()
+      ..color = blue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2);
+
+    // Ligne médiane (p50).
+    final medianPath = Path()..moveTo(xFor(0), yFor(points.first.p50));
+    for (final p in points) {
+      medianPath.lineTo(xFor(p.year), yFor(p.p50));
+    }
+    canvas.drawPath(medianPath, Paint()
+      ..color = gold
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2);
+
+    if (hoveredYear != null) {
+      final p = points[hoveredYear!];
+      final x = xFor(hoveredYear!);
+      _drawDashedLine(canvas, Offset(x, 0), Offset(x, chartHeight), gridColor);
+      _drawDot(canvas, Offset(x, yFor(p.p50)), gold);
+      _drawDot(canvas, Offset(x, yFor(p.principal)), blue);
+      _drawDot(canvas, Offset(x, baselineY), grey);
+    }
+
+    _drawXLabel(canvas, "Aujourd'hui", xFor(0), chartHeight, textColor, alignLeft: true);
+    _drawXLabel(canvas, '${nombreAnnees ~/ 2} ans', xFor(nombreAnnees ~/ 2), chartHeight, textColor);
+    _drawXLabel(canvas, 'dans $nombreAnnees ans', xFor(nombreAnnees), chartHeight, textColor, alignLeft: false);
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Color color) {
+    const dashLength = 4.0;
+    const gapLength = 4.0;
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.7)
+      ..strokeWidth = 1;
+    final totalLength = (end - start).distance;
+    var covered = 0.0;
+    final direction = (end - start) / totalLength;
+    while (covered < totalLength) {
+      final segStart = start + direction * covered;
+      final segEnd = start + direction * (covered + dashLength).clamp(0, totalLength);
+      canvas.drawLine(segStart, segEnd, paint);
+      covered += dashLength + gapLength;
+    }
+  }
+
+  void _drawDot(Canvas canvas, Offset center, Color color) {
+    canvas.drawCircle(center, 6, Paint()..color = color);
+    canvas.drawCircle(center, 6, Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2);
+  }
+
+  void _drawXLabel(Canvas canvas, String text, double x, double y, Color color, {bool? alignLeft}) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: 11)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    double dx;
+    if (alignLeft == true) {
+      dx = x;
+    } else if (alignLeft == false) {
+      dx = x - tp.width;
+    } else {
+      dx = x - tp.width / 2;
+    }
+    tp.paint(canvas, Offset(dx, y + 6));
+  }
+
+  String _fmtAxis(double v) {
+    if (v == 0) return '0 €';
+    if (v >= 1000) return '${(v / 1000).round()} k €';
+    return '${v.round()} €';
+  }
+
+  @override
+  bool shouldRepaint(covariant _MonteCarloChartPainter oldDelegate) =>
       oldDelegate.hoveredYear != hoveredYear || oldDelegate.points != points;
 }

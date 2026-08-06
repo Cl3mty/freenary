@@ -91,7 +91,7 @@ class AppSidebar extends StatelessWidget {
           NavigationSlot(
             leading: const Avatar(size: 32, initials: 'BP'),
             title: const Text('Baptiste').medium.small,
-            subtitle: const Text('Compte').xSmall.normal,
+            subtitle: const Text('baptiste@example.com').xSmall.normal,
             trailing: const Icon(LucideIcons.chevronsUpDown).iconSmall,
             onPressed: () => onSelect('settings'),
           ),
