@@ -16,6 +16,7 @@ import 'features/budget/budget_screen.dart';
 import 'features/simulations/simulations_taxation_screen.dart';
 import 'features/simulations/simulations_wealth_screen.dart';
 import 'features/simulations/simulations_loan_screen.dart';
+import 'features/budget/budget_tracking_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -147,8 +148,18 @@ class _FreenaryAppState extends State<FreenaryApp> {
           'actifs_autres': (_) => const Center(child: Text('Autres')),
           'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
           'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
-          'strategie': (_) => StrategyScreen(vaultPath: _profileController!.activeDataPath),
-          'budget': (_) => BudgetScreen(vaultPath: _profileController!.activeDataPath),
+          'strategie': (_) => StrategyScreen(
+            key: ValueKey(_profileController!.activeDataPath),
+            vaultPath: _profileController!.activeDataPath,
+          ),
+          'budget_ventilation': (_) => BudgetScreen(
+            key: ValueKey(_profileController!.activeDataPath),
+            vaultPath: _profileController!.activeDataPath,
+          ),
+          'budget_suivi': (_) => BudgetTrackingScreen(
+            key: ValueKey(_profileController!.activeDataPath),
+            vaultPath: _profileController!.activeDataPath,
+          ),
           'simulation_taxation': (_) => const TaxationSimulationScreen(),
           'simulation_patrimoine': (_) => const WealthSimulationScreen(),
           'simulation_pret': (_) => const LoanSimulationScreen(),

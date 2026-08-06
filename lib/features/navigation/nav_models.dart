@@ -54,7 +54,15 @@ const outilsGroup = NavGroup(
   label: 'Outils',
   items: [
     NavItem(key: 'strategie', label: 'Stratégie', icon: LucideIcons.notebookPen),
-    NavItem(key: 'budget', label: 'Budget', icon: LucideIcons.wallet),
+    NavItem(
+      key: 'budget',
+      label: 'Budget',
+      icon: LucideIcons.wallet,
+      children: [
+        NavItem(key: 'budget_ventilation', label: 'Ventilation', icon: LucideIcons.workflow),
+        NavItem(key: 'budget_suivi', label: 'Suivi', icon: LucideIcons.listChecks),
+      ],
+    ),
     NavItem(
       key: 'simulation',
       label: 'Simulation',
