@@ -190,10 +190,17 @@ class AppSidebar extends StatelessWidget {
             _withTooltip(
               collapsed ? 'Étendre' : 'Réduire',
               NavigationSlot(
-                leading: IconContainer(
-                  backgroundColor: theme.colorScheme.primary,
-                  icon: const Icon(LucideIcons.landmark).iconMedium,
+                leading: SizedBox(
+                width: 35,
+                height: 35,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.asset(
+                    'assets/icon/icon.png',
+                    fit: BoxFit.cover,
+                  ),
                 ),
+              ),
                 title: const shadcn.Text('Freenary').medium.small,
                 trailing: Icon(
                   collapsed ? LucideIcons.panelLeftOpen : LucideIcons.panelLeftClose,
