@@ -89,12 +89,6 @@ Contributions and ideas welcome — open an issue if you'd like to help with any
 
 ---
 
-## Contributing
-
-Issues and pull requests are welcome. If you're planning a larger change, please open an issue first to discuss it.
-
----
-
 ## License
 
 *No license has been chosen yet.* Until a `LICENSE` file is added to this repository, the "open-source" claim is aspirational — all rights are reserved by default under standard copyright. A permissive license (e.g. MIT or Apache-2.0) is planned before the first public release.
