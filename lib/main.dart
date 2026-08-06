@@ -4,6 +4,7 @@ import 'core/storage/vault_folder_service.dart';
 import 'core/profiles/profile_controller.dart';
 import 'core/profiles/profile_repository.dart';
 import 'core/profiles/sidebar_prefs_controller.dart';
+import 'core/updates/update_banner.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/account_management_screen.dart';
@@ -128,37 +129,41 @@ class _FreenaryAppState extends State<FreenaryApp> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    return AppShell(
-      themeController: _themeController,
-      profileController: _profileController!,
-      sidebarPrefsController: _sidebarPrefsController!,
-      pages: {
-        'dashboard': (_) => const Center(child: Text('Tableau de bord')),
-        'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
-        'actifs_private_equity': (_) => const Center(child: Text('Private Equity')),
-        'actifs_immobilier': (_) => const Center(child: Text('Immobilier')),
-        'actifs_crypto': (_) => const Center(child: Text('Crypto')),
-        'actifs_metaux_precieux': (_) => const Center(child: Text('Métaux précieux')),
-        'actifs_epargne': (_) => const Center(child: Text('Épargne')),
-        'actifs_autres': (_) => const Center(child: Text('Autres')),
-        'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
-        'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
-        'strategie': (_) => StrategyScreen(vaultPath: _profileController!.activeDataPath),
-        'budget': (_) => BudgetScreen(vaultPath: _profileController!.activeDataPath),
-        'simulation_taxation': (_) => const TaxationSimulationScreen(),
-        'simulation_patrimoine': (_) => const WealthSimulationScreen(),
-        'simulation_pret': (_) => const LoanSimulationScreen(),
-        'account_management': (_) => AccountManagementScreen(profileController: _profileController!),
-        'settings': (_) => SettingsScreen(
-              vaultFolderService: _vaultFolderService,
-              currentVaultPath: _vaultPath!,
-              onVaultChanged: _onVaultReady,
-              onVaultReset: _resetVault,
-              themeController: _themeController,
-              profileController: _profileController!,
-              sidebarPrefsController: _sidebarPrefsController!,
-            ),
-      },
+    return UpdateBanner(
+      githubOwner: 'TON_USER_GITHUB',
+      githubRepo: 'freenary',
+      child: AppShell(
+        themeController: _themeController,
+        profileController: _profileController!,
+        sidebarPrefsController: _sidebarPrefsController!,
+        pages: {
+          'dashboard': (_) => const Center(child: Text('Tableau de bord')),
+          'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
+          'actifs_private_equity': (_) => const Center(child: Text('Private Equity')),
+          'actifs_immobilier': (_) => const Center(child: Text('Immobilier')),
+          'actifs_crypto': (_) => const Center(child: Text('Crypto')),
+          'actifs_metaux_precieux': (_) => const Center(child: Text('Métaux précieux')),
+          'actifs_epargne': (_) => const Center(child: Text('Épargne')),
+          'actifs_autres': (_) => const Center(child: Text('Autres')),
+          'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
+          'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
+          'strategie': (_) => StrategyScreen(vaultPath: _profileController!.activeDataPath),
+          'budget': (_) => BudgetScreen(vaultPath: _profileController!.activeDataPath),
+          'simulation_taxation': (_) => const TaxationSimulationScreen(),
+          'simulation_patrimoine': (_) => const WealthSimulationScreen(),
+          'simulation_pret': (_) => const LoanSimulationScreen(),
+          'account_management': (_) => AccountManagementScreen(profileController: _profileController!),
+          'settings': (_) => SettingsScreen(
+                vaultFolderService: _vaultFolderService,
+                currentVaultPath: _vaultPath!,
+                onVaultChanged: _onVaultReady,
+                onVaultReset: _resetVault,
+                themeController: _themeController,
+                profileController: _profileController!,
+                sidebarPrefsController: _sidebarPrefsController!,
+              ),
+        },
+      ),
     );
   }
 }

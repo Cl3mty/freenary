@@ -20,20 +20,35 @@ class BudgetScreen extends StatefulWidget {
 }
 
 class _BudgetScreenState extends State<BudgetScreen> {
-  late final BudgetRepository _repo = BudgetRepository(widget.vaultPath);
+  late BudgetRepository _repo;
 
   final ValueNotifier<List<BudgetSnapshot>> _history = ValueNotifier([]);
   String? _selectedId;
   BudgetData _data = BudgetData.empty();
   bool _loading = true;
   int _tabIndex = 0;
+  int _loadGeneration = 0;
 
   final GlobalKey _sankeyKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    _repo = BudgetRepository(widget.vaultPath);
     _init();
+  }
+
+  @override
+  void didUpdateWidget(covariant BudgetScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.vaultPath != widget.vaultPath) {
+      _repo = BudgetRepository(widget.vaultPath);
+      _history.value = const [];
+      _selectedId = null;
+      _data = BudgetData.empty();
+      _loading = true;
+      _init();
+    }
   }
 
   @override
@@ -43,7 +58,9 @@ class _BudgetScreenState extends State<BudgetScreen> {
   }
 
   Future<void> _init() async {
+    final generation = ++_loadGeneration;
     final list = await _repo.listAll();
+    if (!mounted || generation != _loadGeneration) return;
     _history.value = list;
     if (list.isNotEmpty) {
       _selectedId = list.first.id;
