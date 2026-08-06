@@ -1,0 +1,120 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
+import 'profile_models.dart';
+
+const String masterProfileId = 'master';
+
+class ProfileRepository {
+  final String vaultPath;
+  ProfileRepository(this.vaultPath);
+
+  File get _file => File(p.join(vaultPath, 'profiles.json'));
+
+  String pathFor(String profileId) => p.join(vaultPath, 'profiles', profileId);
+
+  Future<List<Profile>> listAll() async {
+    await _migrateLegacyDataIfNeeded();
+
+    if (!await _file.exists()) {
+      final master = Profile(
+        id: masterProfileId,
+        name: 'Moi',
+        relationship: 'Vous',
+        isMaster: true,
+        createdAt: DateTime.now().toUtc(),
+      );
+      await _writeAll([master]);
+      await _ensureProfileFolder(master.id);
+      return [master];
+    }
+
+    final content = await _file.readAsString();
+    if (content.trim().isEmpty) return [];
+    final list = jsonDecode(content) as List;
+    return list.map((e) => Profile.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> _writeAll(List<Profile> profiles) async {
+    final dir = Directory(vaultPath);
+    if (!await dir.exists()) await dir.create(recursive: true);
+    await _file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(profiles.map((p) => p.toJson()).toList()),
+    );
+  }
+
+  Future<Profile> create({required String name, required String relationship}) async {
+    final all = await listAll();
+    final profile = Profile(
+      id: const Uuid().v4(),
+      name: name,
+      relationship: relationship,
+      isMaster: false,
+      createdAt: DateTime.now().toUtc(),
+    );
+    all.add(profile);
+    await _writeAll(all);
+    await _ensureProfileFolder(profile.id);
+    return profile;
+  }
+
+  Future<void> rename(String id, {required String name, required String relationship}) async {
+    final all = await listAll();
+    final idx = all.indexWhere((p) => p.id == id);
+    if (idx == -1) return;
+    all[idx] = all[idx].copyWith(name: name, relationship: relationship);
+    await _writeAll(all);
+  }
+
+  Future<void> delete(String id) async {
+    final all = await listAll();
+    all.removeWhere((p) => p.id == id && !p.isMaster);
+    await _writeAll(all);
+  }
+
+  Future<void> _ensureProfileFolder(String id) async {
+    final dir = Directory(pathFor(id));
+    if (!await dir.exists()) await dir.create(recursive: true);
+  }
+
+  Future<void> _migrateLegacyDataIfNeeded() async {
+    if (await _file.exists()) return;
+
+    final masterDir = Directory(pathFor(masterProfileId));
+    var hasLegacyData = false;
+    for (final folderName in ['strategy', 'budget']) {
+      final legacy = Directory(p.join(vaultPath, folderName));
+      if (await legacy.exists()) hasLegacyData = true;
+    }
+    if (!hasLegacyData) return;
+
+    if (!await masterDir.exists()) await masterDir.create(recursive: true);
+    for (final folderName in ['strategy', 'budget']) {
+      final legacy = Directory(p.join(vaultPath, folderName));
+      if (await legacy.exists()) {
+        final target = Directory(p.join(masterDir.path, folderName));
+        await _moveDirectoryContents(legacy, target);
+      }
+    }
+  }
+
+  Future<void> _moveDirectoryContents(Directory source, Directory target) async {
+    if (!await target.exists()) await target.create(recursive: true);
+    await for (final entity in source.list()) {
+      final newPath = p.join(target.path, p.basename(entity.path));
+      if (entity is File) {
+        try {
+          await entity.rename(newPath);
+        } catch (_) {
+          final bytes = await entity.readAsBytes();
+          await File(newPath).writeAsBytes(bytes);
+          await entity.delete();
+        }
+      }
+    }
+    try {
+      await source.delete(recursive: true);
+    } catch (_) {}
+  }
+}

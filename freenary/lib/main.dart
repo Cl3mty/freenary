@@ -1,8 +1,11 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/storage/vault_folder_service.dart';
+import 'core/profiles/profile_controller.dart';
+import 'core/profiles/profile_repository.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/settings/account_management_screen.dart';
 import 'app/theme_controller.dart';
 import 'app/app_shell.dart';
 import 'features/strategy/strategy_screen.dart';
@@ -44,6 +47,7 @@ class _FreenaryAppState extends State<FreenaryApp> {
 
   bool _checkingVault = true;
   String? _vaultPath;
+  ProfileController? _profileController;
 
   @override
   void initState() {
@@ -59,11 +63,27 @@ class _FreenaryAppState extends State<FreenaryApp> {
       _vaultPath = path;
       _checkingVault = false;
     });
+    if (path != null) await _initProfiles(path);
   }
 
-  void _onVaultReady(String path) => setState(() => _vaultPath = path);
+  Future<void> _initProfiles(String vaultPath) async {
+    final controller = ProfileController(ProfileRepository(vaultPath));
+    await controller.load();
+    controller.addListener(() => setState(() {}));
+    setState(() => _profileController = controller);
+  }
 
-  void _resetVault() => setState(() => _vaultPath = null);
+  void _onVaultReady(String path) {
+    setState(() => _vaultPath = path);
+    _initProfiles(path);
+  }
+
+  void _resetVault() {
+    setState(() {
+      _vaultPath = null;
+      _profileController = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,8 +116,15 @@ class _FreenaryAppState extends State<FreenaryApp> {
         onVaultReady: _onVaultReady,
       );
     }
+    if (_profileController == null) {
+      return const Scaffold(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
     return AppShell(
+      key: ValueKey('app-shell-${_profileController!.active?.id ?? 'none'}'),
       themeController: _themeController,
+      profileController: _profileController!,
       pages: {
         'dashboard': (_) => const Center(child: Text('Tableau de bord')),
         'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
@@ -109,11 +136,12 @@ class _FreenaryAppState extends State<FreenaryApp> {
         'actifs_autres': (_) => const Center(child: Text('Autres')),
         'passifs_emprunts': (_) => const Center(child: Text('Emprunts')),
         'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
-        'strategie': (_) => StrategyScreen(vaultPath: _vaultPath!),
-        'budget': (_) => BudgetScreen(vaultPath: _vaultPath!),
+        'strategie': (_) => StrategyScreen(vaultPath: _profileController!.activeDataPath),
+        'budget': (_) => BudgetScreen(vaultPath: _profileController!.activeDataPath),
         'simulation_taxation': (_) => const TaxationSimulationScreen(),
         'simulation_patrimoine': (_) => const WealthSimulationScreen(),
         'simulation_pret': (_) => const LoanSimulationScreen(),
+        'account_management': (_) => AccountManagementScreen(profileController: _profileController!),
         'settings': (_) => SettingsScreen(
               vaultFolderService: _vaultFolderService,
               currentVaultPath: _vaultPath!,

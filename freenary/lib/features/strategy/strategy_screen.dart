@@ -13,16 +13,30 @@ class StrategyScreen extends StatefulWidget {
 }
 
 class _StrategyScreenState extends State<StrategyScreen> {
-  late final StrategyRepository _repo = StrategyRepository(widget.vaultPath);
+  late StrategyRepository _repo;
 
   final ValueNotifier<List<StrategyNote>> _notes = ValueNotifier([]);
   String? _selectedId;
   bool _loading = true;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    _repo = StrategyRepository(widget.vaultPath);
     _loadNotes();
+  }
+
+  @override
+  void didUpdateWidget(covariant StrategyScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.vaultPath != widget.vaultPath) {
+      _repo = StrategyRepository(widget.vaultPath);
+      _selectedId = null;
+      _loading = true;
+      _notes.value = const [];
+      _loadNotes();
+    }
   }
 
   @override
@@ -32,7 +46,9 @@ class _StrategyScreenState extends State<StrategyScreen> {
   }
 
   Future<void> _loadNotes() async {
+    final generation = ++_loadGeneration;
     final notes = await _repo.listNotes();
+    if (!mounted || generation != _loadGeneration) return;
     _notes.value = notes;
     if (_loading) {
       setState(() {
@@ -45,11 +61,13 @@ class _StrategyScreenState extends State<StrategyScreen> {
   Future<void> _createNote() async {
     final note = await _repo.createNote();
     await _loadNotes();
+    if (!mounted) return;
     setState(() => _selectedId = note.id);
   }
 
   Future<void> _deleteNote(String id) async {
     await _repo.deleteNote(id);
+    if (!mounted) return;
     if (_selectedId == id) {
       setState(() => _selectedId = null);
     }
