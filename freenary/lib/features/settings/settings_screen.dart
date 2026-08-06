@@ -1,6 +1,10 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../app/theme_controller.dart';
 import '../../core/storage/vault_folder_service.dart';
+import '../../core/ui/frosted_card.dart';
+import '../../core/profiles/profile_controller.dart';
+import '../../core/profiles/sidebar_prefs_controller.dart';
+import 'sidebar_visibility_card.dart';
 
 class SettingsScreen extends StatelessWidget {
   final VaultFolderService vaultFolderService;
@@ -8,6 +12,8 @@ class SettingsScreen extends StatelessWidget {
   final ValueChanged<String> onVaultChanged;
   final VoidCallback onVaultReset;
   final ThemeController themeController;
+  final ProfileController profileController;
+  final SidebarPrefsController sidebarPrefsController;
 
   const SettingsScreen({
     super.key,
@@ -16,11 +22,13 @@ class SettingsScreen extends StatelessWidget {
     required this.onVaultChanged,
     required this.onVaultReset,
     required this.themeController,
+    required this.profileController,
+    required this.sidebarPrefsController,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
@@ -31,6 +39,11 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _ThemeCard(themeController: themeController),
             const SizedBox(height: 16),
+            SidebarVisibilityCard(
+              profileController: profileController,
+              sidebarPrefsController: sidebarPrefsController,
+            ),
+            const SizedBox(height: 16),
             _VaultCard(
               vaultFolderService: vaultFolderService,
               currentVaultPath: currentVaultPath,
@@ -38,6 +51,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _DebugCard(vaultFolderService: vaultFolderService, onVaultReset: onVaultReset),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -55,7 +69,7 @@ class _ThemeCard extends StatelessWidget {
       animation: themeController,
       builder: (context, _) {
         final mode = themeController.mode;
-        return Card(
+        return FrostedCard(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -120,26 +134,26 @@ class _VaultCardState extends State<_VaultCard> {
   String? _error;
 
   Future<void> _changeFolder() async {
-  setState(() { _loading = true; _error = null; });
-  try {
-    final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
-      dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
-    );
-    if (path != null) {
-      widget.onVaultChanged(path);
-    } else {
-      setState(() => _error = 'Sélection annulée ou chemin invalide (result == null)');
+    setState(() { _loading = true; _error = null; });
+    try {
+      final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
+        dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
+      );
+      if (path != null) {
+        widget.onVaultChanged(path);
+      } else {
+        setState(() => _error = 'Sélection annulée ou chemin invalide (result == null)');
+      }
+    } catch (e) {
+      setState(() => _error = 'Impossible de changer d\'emplacement : $e');
+    } finally {
+      setState(() => _loading = false);
     }
-  } catch (e) {
-    setState(() => _error = 'Impossible de changer d\'emplacement : $e');
-  } finally {
-    setState(() => _loading = false);
   }
-}
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return FrostedCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

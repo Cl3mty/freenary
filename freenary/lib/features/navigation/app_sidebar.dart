@@ -1,6 +1,7 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Text;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
 import '../../core/profiles/profile_controller.dart';
+import '../../core/profiles/sidebar_prefs_controller.dart';
 import 'nav_models.dart';
 
 class AppSidebar extends StatelessWidget {
@@ -9,6 +10,7 @@ class AppSidebar extends StatelessWidget {
   final bool collapsed;
   final VoidCallback onToggleCollapse;
   final ProfileController profileController;
+  final SidebarPrefsController sidebarPrefsController;
 
   const AppSidebar({
     super.key,
@@ -17,6 +19,7 @@ class AppSidebar extends StatelessWidget {
     required this.collapsed,
     required this.onToggleCollapse,
     required this.profileController,
+    required this.sidebarPrefsController,
   });
 
   Widget _profileAvatar(BuildContext context, String initials, double size) {
@@ -67,7 +70,7 @@ class AppSidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildGroup(NavGroup group) {
+  Widget _buildGroup(NavGroup group, Set<String> hiddenKeys) {
     return NavigationGroup(
       labelAlignment: Alignment.centerLeft,
       label: shadcn.Text(group.label).semiBold.muted.xSmall,
@@ -76,15 +79,24 @@ class AppSidebar extends StatelessWidget {
           if (item.children.isEmpty)
             _buildItem(item)
           else
-            _withTooltip(
-              item.label,
-              NavigationCollapsible(
-                leading: Icon(item.icon),
-                label: shadcn.Text(item.label),
-                children: [for (final child in item.children) _buildItem(child)],
-              ),
-            ),
+            _buildParentWithFilteredChildren(item, hiddenKeys),
       ],
+    );
+  }
+
+  /// Filtre les sous-items (postes Actifs/Passifs) selon les préférences du
+  /// compte actif. Si tout est masqué, le parent disparaît aussi.
+  Widget _buildParentWithFilteredChildren(NavItem item, Set<String> hiddenKeys) {
+    final visibleChildren = item.children.where((c) => !hiddenKeys.contains(c.key)).toList();
+    if (visibleChildren.isEmpty) return const SizedBox.shrink();
+
+    return _withTooltip(
+      item.label,
+      NavigationCollapsible(
+        leading: Icon(item.icon),
+        label: shadcn.Text(item.label),
+        children: [for (final child in visibleChildren) _buildItem(child)],
+      ),
     );
   }
 
@@ -159,9 +171,14 @@ class AppSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AnimatedBuilder(
-      animation: profileController,
+      animation: Listenable.merge([profileController, sidebarPrefsController]),
       builder: (context, _) {
         final active = profileController.active;
+        final hiddenKeys = active != null ? sidebarPrefsController.hiddenKeysFor(active.id) : <String>{};
+        if (active != null) {
+          sidebarPrefsController.loadFor(active.id);
+        }
+
         return NavigationRail(
           backgroundColor: theme.colorScheme.card,
           labelType: NavigationLabelType.expanded,
@@ -202,9 +219,9 @@ class AppSidebar extends StatelessWidget {
             ),
           ],
           children: [
-            _buildGroup(patrimoineGroup),
+            _buildGroup(patrimoineGroup, hiddenKeys),
             const NavigationDivider(),
-            _buildGroup(outilsGroup),
+            _buildGroup(outilsGroup, hiddenKeys),
           ],
         );
       },

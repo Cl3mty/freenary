@@ -3,6 +3,7 @@ import 'package:window_manager/window_manager.dart';
 import 'core/storage/vault_folder_service.dart';
 import 'core/profiles/profile_controller.dart';
 import 'core/profiles/profile_repository.dart';
+import 'core/profiles/sidebar_prefs_controller.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/account_management_screen.dart';
@@ -48,6 +49,7 @@ class _FreenaryAppState extends State<FreenaryApp> {
   bool _checkingVault = true;
   String? _vaultPath;
   ProfileController? _profileController;
+  SidebarPrefsController? _sidebarPrefsController;
 
   @override
   void initState() {
@@ -70,7 +72,11 @@ class _FreenaryAppState extends State<FreenaryApp> {
     final controller = ProfileController(ProfileRepository(vaultPath));
     await controller.load();
     controller.addListener(() => setState(() {}));
-    setState(() => _profileController = controller);
+    final sidebarPrefs = SidebarPrefsController(controller);
+    setState(() {
+      _profileController = controller;
+      _sidebarPrefsController = sidebarPrefs;
+    });
   }
 
   void _onVaultReady(String path) {
@@ -82,6 +88,7 @@ class _FreenaryAppState extends State<FreenaryApp> {
     setState(() {
       _vaultPath = null;
       _profileController = null;
+      _sidebarPrefsController = null;
     });
   }
 
@@ -116,15 +123,15 @@ class _FreenaryAppState extends State<FreenaryApp> {
         onVaultReady: _onVaultReady,
       );
     }
-    if (_profileController == null) {
+    if (_profileController == null || _sidebarPrefsController == null) {
       return const Scaffold(
         child: Center(child: CircularProgressIndicator()),
       );
     }
     return AppShell(
-      key: ValueKey('app-shell-${_profileController!.active?.id ?? 'none'}'),
       themeController: _themeController,
       profileController: _profileController!,
+      sidebarPrefsController: _sidebarPrefsController!,
       pages: {
         'dashboard': (_) => const Center(child: Text('Tableau de bord')),
         'actifs_actions_fonds': (_) => const Center(child: Text('Actions & Fonds')),
@@ -148,6 +155,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
               onVaultChanged: _onVaultReady,
               onVaultReset: _resetVault,
               themeController: _themeController,
+              profileController: _profileController!,
+              sidebarPrefsController: _sidebarPrefsController!,
             ),
       },
     );

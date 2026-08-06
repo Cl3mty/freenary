@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Text;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
 import '../../core/date_format.dart';
+import '../../core/ui/frosted_card.dart';
 import 'budget_models.dart';
 import 'budget_repository.dart';
 import 'budget_sankey.dart';
@@ -132,7 +133,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Card(
+      child: FrostedCard(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

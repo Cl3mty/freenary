@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
+import '../../core/ui/frosted_card.dart';
 
 enum _LoanType { amortissable, inFine }
 
@@ -34,7 +35,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Card(
+      child: FrostedCard(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

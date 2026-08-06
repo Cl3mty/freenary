@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
+import '../../core/ui/frosted_card.dart';
 
 class TaxationSimulationScreen extends StatefulWidget {
   const TaxationSimulationScreen({super.key});
@@ -112,7 +113,7 @@ class _TaxationSplitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return FrostedCard(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 980;

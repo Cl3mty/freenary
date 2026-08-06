@@ -1,5 +1,6 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../core/profiles/profile_controller.dart';
+import '../core/profiles/sidebar_prefs_controller.dart';
 import '../features/navigation/app_sidebar.dart';
 import 'theme_controller.dart';
 
@@ -8,12 +9,14 @@ const _breakpoint = 800.0;
 class AppShell extends StatefulWidget {
   final ThemeController themeController;
   final ProfileController profileController;
+  final SidebarPrefsController sidebarPrefsController;
   final Map<String, WidgetBuilder> pages;
 
   const AppShell({
     super.key,
     required this.themeController,
     required this.profileController,
+    required this.sidebarPrefsController,
     required this.pages,
   });
 
@@ -42,6 +45,7 @@ class _AppShellState extends State<AppShell> {
         collapsed: false,
         onToggleCollapse: () {},
         profileController: widget.profileController,
+        sidebarPrefsController: widget.sidebarPrefsController,
       ),
     );
   }
@@ -59,6 +63,7 @@ class _AppShellState extends State<AppShell> {
         collapsed: _collapsed,
         onToggleCollapse: () => setState(() => _collapsed = !_collapsed),
         profileController: widget.profileController,
+        sidebarPrefsController: widget.sidebarPrefsController,
       );
       return Scaffold(
         child: Row(

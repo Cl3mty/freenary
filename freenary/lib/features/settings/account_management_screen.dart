@@ -2,6 +2,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' hide Text;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
 import '../../core/profiles/profile_controller.dart';
 import '../../core/profiles/profile_models.dart';
+import '../../core/ui/frosted_card.dart';
 
 class AccountManagementScreen extends StatefulWidget {
   final ProfileController profileController;
@@ -80,7 +81,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   "Toutes les données (stratégie, budget, actifs/passifs) sont propres à chaque compte.",
                 ).muted().small(),
                 const SizedBox(height: 20),
-                Card(
+                FrostedCard(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
