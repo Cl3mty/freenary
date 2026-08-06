@@ -8,7 +8,9 @@ import 'app/app_shell.dart';
 import 'features/strategy/strategy_screen.dart';
 import 'package:flutter_quill/flutter_quill.dart' show FlutterQuillLocalizations;
 import 'features/budget/budget_screen.dart';
-import 'features/simulation/simulation_screen.dart';
+import 'features/simulations/simulations_taxation_screen.dart';
+import 'features/simulations/simulations_wealth_screen.dart';
+import 'features/simulations/simulations_loan_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,9 +111,9 @@ class _FreenaryAppState extends State<FreenaryApp> {
         'passifs_prets_immobiliers': (_) => const Center(child: Text('Prêts immobiliers')),
         'strategie': (_) => StrategyScreen(vaultPath: _vaultPath!),
         'budget': (_) => BudgetScreen(vaultPath: _vaultPath!),
-        'simulation_taxation': (_) => const Center(child: Text('Taxation')),
-        'simulation_patrimoine': (_) => const SimulationScreen(),
-        'simulation_pret': (_) => const Center(child: Text('Prêt')),
+        'simulation_taxation': (_) => const TaxationSimulationScreen(),
+        'simulation_patrimoine': (_) => const WealthSimulationScreen(),
+        'simulation_pret': (_) => const LoanSimulationScreen(),
         'settings': (_) => SettingsScreen(
               vaultFolderService: _vaultFolderService,
               currentVaultPath: _vaultPath!,

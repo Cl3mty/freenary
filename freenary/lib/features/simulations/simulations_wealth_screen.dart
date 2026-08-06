@@ -4,14 +4,14 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
 
-class SimulationScreen extends StatefulWidget {
-  const SimulationScreen({super.key});
+class WealthSimulationScreen extends StatefulWidget {
+  const WealthSimulationScreen({super.key});
 
   @override
-  State<SimulationScreen> createState() => _SimulationScreenState();
+  State<WealthSimulationScreen> createState() => _WealthSimulationScreenState();
 }
 
-class _SimulationScreenState extends State<SimulationScreen> {
+class _WealthSimulationScreenState extends State<WealthSimulationScreen> {
   int _tabIndex = 0;
 
   @override
@@ -21,15 +21,18 @@ class _SimulationScreenState extends State<SimulationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: TabList(
-              index: _tabIndex,
-              onChanged: (value) => setState(() => _tabIndex = value),
-              children: const [
-                TabItem(child: shadcn.Text('Déterministe (Intérêts composés)')),
-                TabItem(child: shadcn.Text('Stochastique (Monte-Carlo)')),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TabList(
+                index: _tabIndex,
+                onChanged: (value) => setState(() => _tabIndex = value),
+                children: const [
+                  TabItem(child: shadcn.Text('Déterministe (Intérêts composés)')),
+                  TabItem(child: shadcn.Text('Stochastique (Monte-Carlo)')),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Expanded(
