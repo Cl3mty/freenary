@@ -71,11 +71,21 @@ dev_dependencies:
   json_serializable: ^6.14.1
   flutter_launcher_icons: ^0.14.4
 
+# Force une version de path_provider_foundation antérieure à sa migration vers
+# le système "native assets" (encore expérimental) — celui-ci tente de
+# compiler la dépendance objective_c même sur des builds Windows, ce qui fait
+# échouer flutter build windows. path_provider_foundation n'est de toute façon
+# utilisé que sur macOS/iOS, jamais sur Windows.
+dependency_overrides:
+  path_provider_foundation: 2.4.1
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
 flutter:
+  assets:
+    - assets/icon/icon.png
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
