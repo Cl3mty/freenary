@@ -1,32 +1,186 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:uuid/uuid.dart';
+
+class SavedVault {
+  final String id;
+  final String name;
+  final String vaultPath;
+  final String? bookmarkData;
+  final bool bookmarkTargetsVault;
+
+  const SavedVault({
+    required this.id,
+    required this.name,
+    required this.vaultPath,
+    this.bookmarkData,
+    required this.bookmarkTargetsVault,
+  });
+
+  SavedVault copyWith({
+    String? id,
+    String? name,
+    String? vaultPath,
+    Object? bookmarkData = _missingBookmarkData,
+    bool? bookmarkTargetsVault,
+  }) {
+    return SavedVault(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      vaultPath: vaultPath ?? this.vaultPath,
+      bookmarkData: identical(bookmarkData, _missingBookmarkData) ? this.bookmarkData : bookmarkData as String?,
+      bookmarkTargetsVault: bookmarkTargetsVault ?? this.bookmarkTargetsVault,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'vaultPath': vaultPath,
+    'bookmarkData': bookmarkData,
+    'bookmarkTargetsVault': bookmarkTargetsVault,
+  };
+
+  factory SavedVault.fromJson(Map<String, dynamic> json) => SavedVault(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? 'Vault',
+    vaultPath: json['vaultPath'] as String,
+    bookmarkData: json['bookmarkData'] as String?,
+    bookmarkTargetsVault: json['bookmarkTargetsVault'] as bool? ?? false,
+  );
+}
+
+class _PickedVault {
+  final String vaultPath;
+  final String? bookmarkData;
+  final bool bookmarkTargetsVault;
+
+  const _PickedVault({
+    required this.vaultPath,
+    required this.bookmarkData,
+    required this.bookmarkTargetsVault,
+  });
+}
+
+const _missingBookmarkData = Object();
 
 class VaultFolderService {
+  static const _vaultsKey = 'saved_vaults_json';
+  static const _activeVaultIdKey = 'active_vault_id';
   static const _pathKey = 'vault_folder_path';
   static const _bookmarkKey = 'vault_folder_bookmark';
   static const _channel = MethodChannel('com.freenary/secure_bookmarks');
 
   Future<String?> getSavedVaultPath() async {
-    final prefs = await SharedPreferences.getInstance();
+    final activeVault = await getActiveVault();
+    return activeVault?.vaultPath;
+  }
 
-    if (Platform.isMacOS) {
-      final bookmarkData = prefs.getString(_bookmarkKey);
-      if (bookmarkData == null) return null;
-      try {
-        final parentPath = await _channel.invokeMethod<String>('resolveAndAccess', bookmarkData);
-        if (parentPath == null) return null;
-        return '$parentPath/.freenary';
-      } catch (e) {
-        return null;
-      }
+  Future<List<SavedVault>> listVaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _migrateLegacyVaultIfNeeded(prefs);
+    final raw = prefs.getString(_vaultsKey);
+    if (raw == null || raw.trim().isEmpty) return [];
+
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(SavedVault.fromJson)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<SavedVault?> getActiveVault() async {
+    final prefs = await SharedPreferences.getInstance();
+    final vaults = await listVaults();
+    if (vaults.isEmpty) return null;
+
+    final activeId = prefs.getString(_activeVaultIdKey);
+    var activeVault = vaults.where((vault) => vault.id == activeId).firstOrNull;
+    activeVault ??= vaults.first;
+    if (activeId != activeVault.id) {
+      await prefs.setString(_activeVaultIdKey, activeVault.id);
     }
 
-    final path = prefs.getString(_pathKey);
-    if (path != null && !await Directory(path).exists()) return null;
-    return path;
+    return _resolveAccessibleVault(activeVault);
+  }
+
+  Future<SavedVault?> setActiveVault(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final vaults = await listVaults();
+    final vault = vaults.where((entry) => entry.id == id).firstOrNull;
+    if (vault == null) return null;
+    await prefs.setString(_activeVaultIdKey, id);
+    return _resolveAccessibleVault(vault);
+  }
+
+  Future<void> renameVault(String id, String name) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return;
+    final vaults = await listVaults();
+    final updated = [
+      for (final vault in vaults)
+        if (vault.id == id) vault.copyWith(name: trimmedName) else vault,
+    ];
+    await _saveVaults(updated);
+  }
+
+  Future<SavedVault?> forgetVault(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final vaults = await listVaults();
+    final remaining = vaults.where((vault) => vault.id != id).toList();
+    await _saveVaults(remaining);
+
+    if (remaining.isEmpty) {
+      await prefs.remove(_activeVaultIdKey);
+      return null;
+    }
+
+    final activeId = prefs.getString(_activeVaultIdKey);
+    final nextVault = remaining.where((vault) => vault.id == activeId).firstOrNull ?? remaining.first;
+    await prefs.setString(_activeVaultIdKey, nextVault.id);
+    return _resolveAccessibleVault(nextVault);
+  }
+
+  Future<SavedVault?> pickAndRememberVault({
+    String? dialogTitle,
+    String? currentVaultPath,
+    void Function(int copied, int total)? onMigrationProgress,
+    String? name,
+  }) async {
+    final picked = await _pickVaultFolder(
+      dialogTitle: dialogTitle,
+      currentVaultPath: currentVaultPath,
+      onMigrationProgress: onMigrationProgress,
+    );
+    if (picked == null) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final vaults = await listVaults();
+    final existing = vaults.where((vault) => p.equals(vault.vaultPath, picked.vaultPath)).firstOrNull;
+    if (existing != null) {
+      await prefs.setString(_activeVaultIdKey, existing.id);
+      return _resolveAccessibleVault(existing);
+    }
+
+    final savedVault = SavedVault(
+      id: const Uuid().v4(),
+      name: _effectiveVaultName(name, picked.vaultPath),
+      vaultPath: picked.vaultPath,
+      bookmarkData: picked.bookmarkData,
+      bookmarkTargetsVault: picked.bookmarkTargetsVault,
+    );
+    await _saveVaults([...vaults, savedVault]);
+    await prefs.setString(_activeVaultIdKey, savedVault.id);
+    return savedVault;
   }
 
   /// Sélectionne un nouveau dossier de données.
@@ -44,15 +198,24 @@ class VaultFolderService {
     String? currentVaultPath,
     void Function(int copied, int total)? onMigrationProgress,
   }) async {
+    final vault = await pickAndRememberVault(
+      dialogTitle: dialogTitle,
+      currentVaultPath: currentVaultPath,
+      onMigrationProgress: onMigrationProgress,
+    );
+    return vault?.vaultPath;
+  }
+
+  Future<_PickedVault?> _pickVaultFolder({
+    String? dialogTitle,
+    String? currentVaultPath,
+    void Function(int copied, int total)? onMigrationProgress,
+  }) async {
     final result = await FilePicker.getDirectoryPath(dialogTitle: dialogTitle);
     if (result == null) return null;
 
-    // Protection contre la sélection directe d'un dossier .freenary existant :
-    // on l'utilise tel quel plutôt que de créer .freenary/.freenary dedans.
     final selectedIsAlreadyVault = p.basename(result) == '.freenary';
     final vaultDir = selectedIsAlreadyVault ? Directory(result) : Directory(p.join(result, '.freenary'));
-
-    final prefs = await SharedPreferences.getInstance();
     final alreadyExists = await vaultDir.exists();
 
     if (!alreadyExists) {
@@ -71,30 +234,27 @@ class VaultFolderService {
           });
 
           if (errors.isNotEmpty) {
-            // ignore: avoid_print
-            print('Erreurs de migration (${errors.length} fichier(s) non copiés) :');
+            debugPrint('Erreurs de migration (${errors.length} fichier(s) non copiés) :');
             for (final e in errors) {
-              print('  - $e');
+              debugPrint('  - $e');
             }
           }
         }
       }
     }
-    // Si alreadyExists == true (y compris via la protection ci-dessus) :
-    // on ne touche à rien, on charge tel quel.
 
+    String? bookmarkData;
     if (Platform.isMacOS) {
-      // Le bookmark de sécurité doit toujours porter sur le dossier
-      // sélectionné par l'utilisateur (result), pas sur vaultDir, pour que
-      // l'accès sandbox reste valide même dans le cas "déjà .freenary".
-      final bookmarkData = await _channel.invokeMethod<String>('createBookmark', result);
+      final bookmarkTarget = result;
+      bookmarkData = await _channel.invokeMethod<String>('createBookmark', bookmarkTarget);
       if (bookmarkData == null) return null;
-      await prefs.setString(_bookmarkKey, bookmarkData);
-    } else {
-      await prefs.setString(_pathKey, vaultDir.path);
     }
 
-    return vaultDir.path;
+    return _PickedVault(
+      vaultPath: vaultDir.path,
+      bookmarkData: bookmarkData,
+      bookmarkTargetsVault: selectedIsAlreadyVault,
+    );
   }
 
   Future<int> _countFiles(Directory dir) async {
@@ -132,7 +292,91 @@ class VaultFolderService {
 
   Future<void> clearSavedVaultPath() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_vaultsKey);
+    await prefs.remove(_activeVaultIdKey);
     await prefs.remove(_pathKey);
     await prefs.remove(_bookmarkKey);
+  }
+
+  Future<void> _saveVaults(List<SavedVault> vaults) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _vaultsKey,
+      const JsonEncoder.withIndent('  ').convert(vaults.map((vault) => vault.toJson()).toList()),
+    );
+  }
+
+  Future<void> _migrateLegacyVaultIfNeeded(SharedPreferences prefs) async {
+    if (prefs.containsKey(_vaultsKey)) return;
+
+    String? legacyPath;
+    String? legacyBookmarkData;
+    var bookmarkTargetsVault = false;
+
+    if (Platform.isMacOS) {
+      legacyBookmarkData = prefs.getString(_bookmarkKey);
+      if (legacyBookmarkData != null) {
+        try {
+          final parentPath = await _channel.invokeMethod<String>('resolveAndAccess', legacyBookmarkData);
+          if (parentPath != null) {
+            legacyPath = p.join(parentPath, '.freenary');
+          }
+        } catch (_) {}
+      }
+    } else {
+      legacyPath = prefs.getString(_pathKey);
+    }
+
+    if (legacyPath == null) return;
+
+    final legacyVault = SavedVault(
+      id: const Uuid().v4(),
+      name: _effectiveVaultName('Vault principal', legacyPath),
+      vaultPath: legacyPath,
+      bookmarkData: legacyBookmarkData,
+      bookmarkTargetsVault: bookmarkTargetsVault,
+    );
+    await _saveVaults([legacyVault]);
+    await prefs.setString(_activeVaultIdKey, legacyVault.id);
+    await prefs.remove(_pathKey);
+    await prefs.remove(_bookmarkKey);
+  }
+
+  Future<SavedVault?> _resolveAccessibleVault(SavedVault vault) async {
+    if (!Platform.isMacOS) {
+      return await Directory(vault.vaultPath).exists() ? vault : null;
+    }
+    final bookmarkData = vault.bookmarkData;
+    if (bookmarkData == null) {
+      return await Directory(vault.vaultPath).exists() ? vault : null;
+    }
+
+    try {
+      final bookmarkTarget = await _channel.invokeMethod<String>('resolveAndAccess', bookmarkData);
+      if (bookmarkTarget == null) return null;
+      final resolvedVaultPath = vault.bookmarkTargetsVault ? bookmarkTarget : p.join(bookmarkTarget, '.freenary');
+      final resolvedVault = vault.copyWith(vaultPath: resolvedVaultPath);
+      if (!p.equals(resolvedVault.vaultPath, vault.vaultPath)) {
+        final vaults = await listVaults();
+        await _saveVaults([
+          for (final entry in vaults)
+            if (entry.id == resolvedVault.id) resolvedVault else entry,
+        ]);
+      }
+      return await Directory(resolvedVault.vaultPath).exists() ? resolvedVault : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _effectiveVaultName(String? explicitName, String vaultPath) {
+    final trimmed = explicitName?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) return trimmed;
+    final base = p.basename(vaultPath);
+    if (base == '.freenary') {
+      final parent = p.basename(p.dirname(vaultPath));
+      if (parent.isNotEmpty && parent != '.') return parent;
+    }
+    return base.isNotEmpty ? base : 'Vault';
   }
 }

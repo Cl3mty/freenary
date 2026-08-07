@@ -56,6 +56,10 @@ class _FreenaryAppState extends State<FreenaryApp> {
   ProfileController? _profileController;
   SidebarPrefsController? _sidebarPrefsController;
 
+  void _handleProfileControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +69,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
   }
 
   Future<void> _loadVault() async {
-    final path = await _vaultFolderService.getSavedVaultPath();
+    final activeVault = await _vaultFolderService.getActiveVault();
+    final path = activeVault?.vaultPath;
     setState(() {
       _vaultPath = path;
       _checkingVault = false;
@@ -74,22 +79,38 @@ class _FreenaryAppState extends State<FreenaryApp> {
   }
 
   Future<void> _initProfiles(String vaultPath) async {
+    final oldController = _profileController;
+    oldController?.removeListener(_handleProfileControllerChanged);
+    oldController?.dispose();
+
+    setState(() {
+      _vaultPath = vaultPath;
+      _profileController = null;
+      _sidebarPrefsController = null;
+    });
+
     final controller = ProfileController(ProfileRepository(vaultPath));
     await controller.load();
-    controller.addListener(() => setState(() {}));
+    controller.addListener(_handleProfileControllerChanged);
     final sidebarPrefs = SidebarPrefsController(controller);
+    if (!mounted) {
+      controller.removeListener(_handleProfileControllerChanged);
+      controller.dispose();
+      return;
+    }
     setState(() {
       _profileController = controller;
       _sidebarPrefsController = sidebarPrefs;
     });
   }
 
-  void _onVaultReady(String path) {
-    setState(() => _vaultPath = path);
-    _initProfiles(path);
+  Future<void> _onVaultReady(String path) async {
+    await _initProfiles(path);
   }
 
   void _resetVault() {
+    _profileController?.removeListener(_handleProfileControllerChanged);
+    _profileController?.dispose();
     setState(() {
       _vaultPath = null;
       _profileController = null;
@@ -178,9 +199,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
           'account_management': (_) => AccountManagementScreen(profileController: _profileController!),
           'settings': (_) => SettingsScreen(
                 vaultFolderService: _vaultFolderService,
-                currentVaultPath: _vaultPath!,
-                onVaultChanged: _onVaultReady,
-                onVaultReset: _resetVault,
+                onVaultActivated: _onVaultReady,
+                onNoVaultSelected: _resetVault,
                 themeController: _themeController,
                 profileController: _profileController!,
                 sidebarPrefsController: _sidebarPrefsController!,

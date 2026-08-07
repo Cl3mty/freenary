@@ -11,9 +11,8 @@ import 'sidebar_visibility_card.dart';
 
 class SettingsScreen extends StatelessWidget {
   final VaultFolderService vaultFolderService;
-  final String currentVaultPath;
-  final ValueChanged<String> onVaultChanged;
-  final VoidCallback onVaultReset;
+  final Future<void> Function(String path) onVaultActivated;
+  final VoidCallback onNoVaultSelected;
   final ThemeController themeController;
   final ProfileController profileController;
   final SidebarPrefsController sidebarPrefsController;
@@ -23,9 +22,8 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
     required this.vaultFolderService,
-    required this.currentVaultPath,
-    required this.onVaultChanged,
-    required this.onVaultReset,
+    required this.onVaultActivated,
+    required this.onNoVaultSelected,
     required this.themeController,
     required this.profileController,
     required this.sidebarPrefsController,
@@ -55,11 +53,9 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _VaultCard(
               vaultFolderService: vaultFolderService,
-              currentVaultPath: currentVaultPath,
-              onVaultChanged: onVaultChanged,
+              onVaultActivated: onVaultActivated,
+              onNoVaultSelected: onNoVaultSelected,
             ),
-            const SizedBox(height: 16),
-            _DebugCard(vaultFolderService: vaultFolderService, onVaultReset: onVaultReset),
             const SizedBox(height: 32),
           ],
         ),
@@ -245,13 +241,13 @@ class _ThemeCard extends StatelessWidget {
 
 class _VaultCard extends StatefulWidget {
   final VaultFolderService vaultFolderService;
-  final String currentVaultPath;
-  final ValueChanged<String> onVaultChanged;
+  final Future<void> Function(String path) onVaultActivated;
+  final VoidCallback onNoVaultSelected;
 
   const _VaultCard({
     required this.vaultFolderService,
-    required this.currentVaultPath,
-    required this.onVaultChanged,
+    required this.onVaultActivated,
+    required this.onNoVaultSelected,
   });
 
   @override
@@ -259,74 +255,144 @@ class _VaultCard extends StatefulWidget {
 }
 
 class _VaultCardState extends State<_VaultCard> {
-  bool _loading = false;
-  String? _error;
-  double _progress = 0;
-  int _copiedCount = 0;
-  int _totalCount = 0;
+  final _editNameController = TextEditingController();
 
-  Future<void> _changeFolder() async {
+  List<SavedVault> _vaults = const [];
+  String? _activeVaultId;
+  String? _editingId;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVaults();
+  }
+
+  @override
+  void dispose() {
+    _editNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadVaults() async {
+    final vaults = await widget.vaultFolderService.listVaults();
+    final activeVault = await widget.vaultFolderService.getActiveVault();
+    if (!mounted) return;
+    setState(() {
+      _vaults = vaults;
+      _activeVaultId = activeVault?.id;
+      _loading = false;
+    });
+  }
+
+  Future<void> _addVault() async {
     setState(() {
       _loading = true;
       _error = null;
-      _progress = 0;
-      _copiedCount = 0;
-      _totalCount = 0;
     });
     try {
-      final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
-        dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
-        currentVaultPath: widget.currentVaultPath,
-        onMigrationProgress: (copied, total) {
-          if (!mounted) return;
-          setState(() {
-            _copiedCount = copied;
-            _totalCount = total;
-            _progress = total > 0 ? (copied / total * 100) : 100;
-          });
-        },
+      final vault = await widget.vaultFolderService.pickAndRememberVault(
+        dialogTitle: 'Choisis ou crée un vault Freenary',
       );
-      if (path != null) {
-        widget.onVaultChanged(path);
-      } else {
-        setState(() => _error = 'Sélection annulée ou chemin invalide (result == null)');
+      if (vault != null) {
+        await widget.onVaultActivated(vault.vaultPath);
       }
     } catch (e) {
-      setState(() => _error = 'Impossible de changer d\'emplacement : $e');
+      if (mounted) setState(() => _error = 'Impossible d\'ajouter un vault : $e');
     } finally {
-      setState(() => _loading = false);
+      await _loadVaults();
+    }
+  }
+
+  void _startEdit(SavedVault vault) {
+    _editNameController.text = vault.name;
+    setState(() => _editingId = vault.id);
+  }
+
+  Future<void> _commitEdit(String id) async {
+    final name = _editNameController.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _loading = true);
+    await widget.vaultFolderService.renameVault(id, name);
+    if (!mounted) return;
+    setState(() => _editingId = null);
+    await _loadVaults();
+  }
+
+  Future<void> _switchTo(SavedVault vault) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final activeVault = await widget.vaultFolderService.setActiveVault(vault.id);
+      if (activeVault == null) {
+        widget.onNoVaultSelected();
+      } else {
+        await widget.onVaultActivated(activeVault.vaultPath);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Impossible d\'activer ce vault : $e');
+    } finally {
+      await _loadVaults();
+    }
+  }
+
+  Future<void> _forgetVault(SavedVault vault) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final nextVault = await widget.vaultFolderService.forgetVault(vault.id);
+      if (nextVault == null) {
+        widget.onNoVaultSelected();
+      } else {
+        await widget.onVaultActivated(nextVault.vaultPath);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Impossible d\'oublier ce vault : $e');
+    } finally {
+      await _loadVaults();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final activeId = _activeVaultId;
+    final theme = Theme.of(context);
+
     return FrostedCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Emplacement des données').large().medium(),
+            const Text('Vaults').large().medium(),
             const SizedBox(height: 8),
-            Text(widget.currentVaultPath, style: const TextStyle(fontFamily: 'monospace')).muted(),
+            const Text(
+              'Ajoute plusieurs vaults, donne-leur un nom, bascule entre eux et oublie-les sans toucher aux données sur disque.',
+            ).muted().small(),
             const SizedBox(height: 16),
-            OutlineButton(
-              onPressed: _loading ? null : _changeFolder,
-              leading: const Icon(LucideIcons.folderOpen),
-              child: Text(_loading ? 'Migration en cours...' : "Modifier l'emplacement"),
-            ),
-            if (_loading && _totalCount > 0) ...[
-              const SizedBox(height: 16),
-              Progress(
-                progress: _progress.clamp(0, 100),
-                min: 0,
-                max: 100,
+            if (_loading)
+              const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            else ...[
+              for (final vault in _vaults) ...[
+                if (_editingId == vault.id)
+                  _buildEditRow(vault)
+                else
+                  _buildVaultRow(vault, isActive: vault.id == activeId, theme: theme),
+                const Divider(),
+              ],
+              OutlineButton(
+                onPressed: _addVault,
+                leading: const Icon(LucideIcons.folderPlus),
+                child: const Text('Ajouter un vault'),
               ),
-              const SizedBox(height: 6),
-              Text('$_copiedCount / $_totalCount fichiers copiés').muted().small(),
             ],
             if (_error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.destructive)),
             ],
           ],
@@ -334,42 +400,76 @@ class _VaultCardState extends State<_VaultCard> {
       ),
     );
   }
-}
-
-class _DebugCard extends StatelessWidget {
-  final VaultFolderService vaultFolderService;
-  final VoidCallback onVaultReset;
-
-  const _DebugCard({required this.vaultFolderService, required this.onVaultReset});
-
-  Future<void> _resetOnboarding() async {
-    await vaultFolderService.clearSavedVaultPath();
-    onVaultReset();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final destructive = Theme.of(context).colorScheme.destructive;
-    return Container(
-      decoration: BoxDecoration(
-        color: destructive.scaleAlpha(0.08),
-        borderRadius: BorderRadius.circular(Theme.of(context).radiusMd),
-        border: Border.all(color: destructive.scaleAlpha(0.3)),
-      ),
-      padding: const EdgeInsets.all(16),
+  Widget _buildVaultRow(SavedVault vault, {required bool isActive, required ThemeData theme}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Debug').large().medium(),
-          const SizedBox(height: 4),
-          const Text(
-            'Réinitialise le chemin sauvegardé pour retester le premier démarrage. Ne supprime pas les fichiers .freenary existants.',
-          ).muted(),
-          const SizedBox(height: 16),
-          OutlineButton(
-            onPressed: _resetOnboarding,
-            leading: Icon(LucideIcons.refreshCw, color: destructive),
-            child: Text('Simuler le premier démarrage', style: TextStyle(color: destructive)),
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.database, size: 16),
+                    const SizedBox(width: 8),
+                    Flexible(child: Text(vault.name).medium()),
+                    if (isActive) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.accent,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text('Actif').small(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (!isActive)
+                OutlineButton(
+                  onPressed: () => _switchTo(vault),
+                  child: const Text('Basculer'),
+                ),
+              IconButton.ghost(
+                icon: const Icon(LucideIcons.pencil, size: 16),
+                onPressed: () => _startEdit(vault),
+              ),
+              IconButton.ghost(
+                icon: const Icon(LucideIcons.trash2, size: 16),
+                onPressed: () => _forgetVault(vault),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(vault.vaultPath, style: const TextStyle(fontFamily: 'monospace')).muted().small(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditRow(SavedVault vault) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _editNameController,
+              placeholder: const Text('Nom du vault'),
+              autofocus: true,
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.ghost(
+            icon: const Icon(LucideIcons.check, size: 16),
+            onPressed: () => _commitEdit(vault.id),
+          ),
+          IconButton.ghost(
+            icon: const Icon(LucideIcons.x, size: 16),
+            onPressed: () => setState(() => _editingId = null),
           ),
         ],
       ),
