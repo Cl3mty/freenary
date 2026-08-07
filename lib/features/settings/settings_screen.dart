@@ -134,22 +134,23 @@ class _VaultCardState extends State<_VaultCard> {
   String? _error;
 
   Future<void> _changeFolder() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
-        dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
-      );
-      if (path != null) {
-        widget.onVaultChanged(path);
-      } else {
-        setState(() => _error = 'Sélection annulée ou chemin invalide (result == null)');
-      }
-    } catch (e) {
-      setState(() => _error = 'Impossible de changer d\'emplacement : $e');
-    } finally {
-      setState(() => _loading = false);
+  setState(() { _loading = true; _error = null; });
+  try {
+    final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
+      dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
+      currentVaultPath: widget.currentVaultPath,
+    );
+    if (path != null) {
+      widget.onVaultChanged(path);
+    } else {
+      setState(() => _error = 'Sélection annulée ou chemin invalide (result == null)');
     }
+  } catch (e) {
+    setState(() => _error = 'Impossible de changer d\'emplacement : $e');
+  } finally {
+    setState(() => _loading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +167,7 @@ class _VaultCardState extends State<_VaultCard> {
             OutlineButton(
               onPressed: _loading ? null : _changeFolder,
               leading: const Icon(LucideIcons.folderOpen),
-              child: Text(_loading ? 'Changement...' : "Modifier l'emplacement"),
+              child: Text(_loading ? 'Changement de dossier et migration des données ...' : "Modifier l'emplacement"),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
