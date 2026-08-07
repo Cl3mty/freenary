@@ -133,6 +133,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
       final savePath = await FilePicker.saveFile(
         dialogTitle: 'Enregistrer le graphique',
         fileName: 'flux-budgetaire.png',
+        bytes: bytes,
       );
       if (savePath == null) return;
 
