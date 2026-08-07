@@ -45,7 +45,7 @@ class FreenaryApp extends StatefulWidget {
 }
 
 class _FreenaryAppState extends State<FreenaryApp> {
-  static const _githubOwner = 'baptistepetiot';
+  static const _githubOwner = 'Cl3mty';
   static const _githubRepo = 'freenary';
 
   final _themeController = ThemeController();

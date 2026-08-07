@@ -1,5 +1,4 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme_controller.dart';
 import '../../core/storage/vault_folder_service.dart';
@@ -78,6 +77,7 @@ class _VersionCardState extends State<_VersionCard> {
   bool _loading = true;
   String? _error;
   String _currentVersion = '-';
+  String? _latestVersion;
   UpdateInfo? _update;
 
   @override
@@ -92,20 +92,18 @@ class _VersionCardState extends State<_VersionCard> {
       _error = null;
     });
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
       final checker = UpdateChecker(
         githubOwner: widget.githubOwner,
         githubRepo: widget.githubRepo,
       );
-      final update = await checker.checkForUpdate();
+      final result = await checker.checkForUpdateDetailed();
       if (!mounted) return;
       setState(() {
-        _currentVersion = packageInfo.version;
-        _update = update;
+        _currentVersion = result.currentVersion;
+        _latestVersion = result.latestVersion;
+        _update = result.update;
+        _error = result.errorMessage;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = 'Impossible de vérifier la version : $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -174,7 +172,12 @@ class _VersionCardState extends State<_VersionCard> {
                 children: [
                   Icon(LucideIcons.circleCheckBig, size: 16, color: accent),
                   const SizedBox(width: 8),
-                  Text('Vous êtes à jour.', style: TextStyle(color: muted)),
+                  Text(
+                    _latestVersion == null
+                        ? 'Version distante inconnue.'
+                        : 'Vous êtes à jour (latest: $_latestVersion).',
+                    style: TextStyle(color: muted),
+                  ),
                 ],
               ),
           ],
