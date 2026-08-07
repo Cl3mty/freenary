@@ -91,7 +91,7 @@ class _UpdateBannerState extends State<UpdateBanner> {
                 size: ButtonSize.small,
                 onPressed: _download,
                 leading: const Icon(LucideIcons.download, size: 14),
-                child: const shadcn.Text('Télécharger'),
+                child: const shadcn.Text('Télécharger et installer'),
               ),
               const SizedBox(width: 8),
               IconButton.ghost(

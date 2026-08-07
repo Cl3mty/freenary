@@ -45,6 +45,9 @@ class FreenaryApp extends StatefulWidget {
 }
 
 class _FreenaryAppState extends State<FreenaryApp> {
+  static const _githubOwner = 'baptistepetiot';
+  static const _githubRepo = 'freenary';
+
   final _themeController = ThemeController();
   final _vaultFolderService = VaultFolderService();
 
@@ -131,8 +134,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
       );
     }
     return UpdateBanner(
-      githubOwner: 'TON_USER_GITHUB',
-      githubRepo: 'freenary',
+      githubOwner: _githubOwner,
+      githubRepo: _githubRepo,
       child: AppShell(
         themeController: _themeController,
         profileController: _profileController!,
@@ -160,9 +163,18 @@ class _FreenaryAppState extends State<FreenaryApp> {
             key: ValueKey(_profileController!.activeDataPath),
             vaultPath: _profileController!.activeDataPath,
           ),
-          'simulation_taxation': (_) => const TaxationSimulationScreen(),
-          'simulation_patrimoine': (_) => const WealthSimulationScreen(),
-          'simulation_pret': (_) => const LoanSimulationScreen(),
+          'simulation_taxation': (_) => TaxationSimulationScreen(
+            key: ValueKey(_profileController!.activeDataPath),
+            vaultPath: _profileController!.activeDataPath,
+          ),
+          'simulation_patrimoine': (_) => WealthSimulationScreen(
+            key: ValueKey(_profileController!.activeDataPath),
+            vaultPath: _profileController!.activeDataPath,
+          ),
+          'simulation_pret': (_) => LoanSimulationScreen(
+            key: ValueKey(_profileController!.activeDataPath),
+            vaultPath: _profileController!.activeDataPath,
+          ),
           'account_management': (_) => AccountManagementScreen(profileController: _profileController!),
           'settings': (_) => SettingsScreen(
                 vaultFolderService: _vaultFolderService,
@@ -172,6 +184,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
                 themeController: _themeController,
                 profileController: _profileController!,
                 sidebarPrefsController: _sidebarPrefsController!,
+                githubOwner: _githubOwner,
+                githubRepo: _githubRepo,
               ),
         },
       ),

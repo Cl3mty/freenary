@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
+import '../../core/simulations/simulation_state_repository.dart';
 import '../../core/ui/frosted_card.dart';
 
 enum _LoanType { amortissable, inFine }
@@ -10,7 +11,9 @@ enum _LoanType { amortissable, inFine }
 enum _DeferType { totale, partielle }
 
 class LoanSimulationScreen extends StatefulWidget {
-  const LoanSimulationScreen({super.key});
+  final String vaultPath;
+
+  const LoanSimulationScreen({super.key, required this.vaultPath});
 
   @override
   State<LoanSimulationScreen> createState() => _LoanSimulationScreenState();
@@ -28,6 +31,108 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
   bool _differeActif = false;
   int _dureeDiffereMois = 12;
   _DeferType _typeDiffere = _DeferType.partielle;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('loan');
+    if (!mounted || data.isEmpty) return;
+
+    setState(() {
+      _montantEmprunte = _readDouble(data, 'montantEmprunte', fallback: _montantEmprunte);
+      _dureeAnnees = _readInt(data, 'dureeAnnees', fallback: _dureeAnnees).clamp(1, 35);
+      _tauxInteret = _readDouble(data, 'tauxInteret', fallback: _tauxInteret);
+      _tauxAssurance = _readDouble(data, 'tauxAssurance', fallback: _tauxAssurance);
+      _fraisDossier = _readDouble(data, 'fraisDossier', fallback: _fraisDossier);
+      _fraisGarantie = _readDouble(data, 'fraisGarantie', fallback: _fraisGarantie);
+      _type = _readLoanType(data, 'type', fallback: _type);
+      _differeActif = _readBool(data, 'differeActif', fallback: _differeActif);
+      _dureeDiffereMois = _readInt(data, 'dureeDiffereMois', fallback: _dureeDiffereMois).clamp(1, _dureeAnnees * 12 - 1);
+      _typeDiffere = _readDeferType(data, 'typeDiffere', fallback: _typeDiffere);
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('loan', {
+      'montantEmprunte': _montantEmprunte,
+      'dureeAnnees': _dureeAnnees,
+      'tauxInteret': _tauxInteret,
+      'tauxAssurance': _tauxAssurance,
+      'fraisDossier': _fraisDossier,
+      'fraisGarantie': _fraisGarantie,
+      'type': _type.name,
+      'differeActif': _differeActif,
+      'dureeDiffereMois': _dureeDiffereMois,
+      'typeDiffere': _typeDiffere.name,
+    });
+  }
+
+  void _update(void Function() change) {
+    setState(change);
+    _saveState();
+  }
+
+  double _readDouble(Map<String, dynamic> json, String key, {required double fallback}) {
+    final value = json[key];
+    if (value is num) return value.toDouble();
+    return fallback;
+  }
+
+  int _readInt(Map<String, dynamic> json, String key, {required int fallback}) {
+    final value = json[key];
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return fallback;
+  }
+
+  bool _readBool(Map<String, dynamic> json, String key, {required bool fallback}) {
+    final value = json[key];
+    if (value is bool) return value;
+    return fallback;
+  }
+
+  _LoanType _readLoanType(Map<String, dynamic> json, String key, {required _LoanType fallback}) {
+    final value = json[key];
+    if (value is String) {
+      for (final t in _LoanType.values) {
+        if (t.name == value) return t;
+      }
+    }
+    return fallback;
+  }
+
+  _DeferType _readDeferType(Map<String, dynamic> json, String key, {required _DeferType fallback}) {
+    final value = json[key];
+    if (value is String) {
+      for (final t in _DeferType.values) {
+        if (t.name == value) return t;
+      }
+    }
+    return fallback;
+  }
+
+  Future<void> _resetState() async {
+    await _stateRepo.delete('loan');
+    if (!mounted) return;
+    setState(() {
+      _montantEmprunte = 100000;
+      _dureeAnnees = 20;
+      _tauxInteret = 3.5;
+      _tauxAssurance = 0.15;
+      _fraisDossier = 800;
+      _fraisGarantie = 1200;
+      _type = _LoanType.amortissable;
+      _differeActif = false;
+      _dureeDiffereMois = 12;
+      _typeDiffere = _DeferType.partielle;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,12 +260,12 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
           children: [
             SelectedButton(
               value: _type == _LoanType.amortissable,
-              onChanged: (_) => setState(() => _type = _LoanType.amortissable),
+              onChanged: (_) => _update(() => _type = _LoanType.amortissable),
               child: const shadcn.Text('Amortissable'),
             ),
             SelectedButton(
               value: _type == _LoanType.inFine,
-              onChanged: (_) => setState(() => _type = _LoanType.inFine),
+              onChanged: (_) => _update(() => _type = _LoanType.inFine),
               child: const shadcn.Text('In fine'),
             ),
           ],
@@ -171,7 +276,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
           suffix: '€',
           value: _montantEmprunte,
           step: 1000,
-          onChanged: (v) => setState(() => _montantEmprunte = v),
+          onChanged: (v) => _update(() => _montantEmprunte = v),
         ),
         const SizedBox(height: 16),
         _NumberField(
@@ -180,7 +285,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
           value: _dureeAnnees.toDouble(),
           step: 1,
           decimals: 0,
-          onChanged: (v) => setState(() => _dureeAnnees = v.round().clamp(1, 35)),
+          onChanged: (v) => _update(() => _dureeAnnees = v.round().clamp(1, 35)),
         ),
         const SizedBox(height: 16),
         Row(
@@ -193,7 +298,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
                 value: _tauxInteret,
                 step: 0.1,
                 decimals: 2,
-                onChanged: (v) => setState(() => _tauxInteret = v),
+                onChanged: (v) => _update(() => _tauxInteret = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -204,7 +309,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
                 value: _tauxAssurance,
                 step: 0.05,
                 decimals: 2,
-                onChanged: (v) => setState(() => _tauxAssurance = v),
+                onChanged: (v) => _update(() => _tauxAssurance = v),
               ),
             ),
           ],
@@ -220,7 +325,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
                 value: _fraisDossier,
                 step: 50,
                 decimals: 0,
-                onChanged: (v) => setState(() => _fraisDossier = v),
+                onChanged: (v) => _update(() => _fraisDossier = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -231,7 +336,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
                 value: _fraisGarantie,
                 step: 50,
                 decimals: 0,
-                onChanged: (v) => setState(() => _fraisGarantie = v),
+                onChanged: (v) => _update(() => _fraisGarantie = v),
               ),
             ),
           ],
@@ -245,7 +350,7 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
               Expanded(child: shadcn.Text('Différé de remboursement').semiBold().small()),
               _SimpleSwitch(
                 value: _differeActif,
-                onChanged: (v) => setState(() => _differeActif = v),
+                onChanged: (v) => _update(() => _differeActif = v),
               ),
             ],
           ),
@@ -255,12 +360,12 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
               children: [
                 SelectedButton(
                   value: _typeDiffere == _DeferType.partielle,
-                  onChanged: (_) => setState(() => _typeDiffere = _DeferType.partielle),
+                  onChanged: (_) => _update(() => _typeDiffere = _DeferType.partielle),
                   child: const shadcn.Text('Franchise partielle'),
                 ),
                 SelectedButton(
                   value: _typeDiffere == _DeferType.totale,
-                  onChanged: (_) => setState(() => _typeDiffere = _DeferType.totale),
+                  onChanged: (_) => _update(() => _typeDiffere = _DeferType.totale),
                   child: const shadcn.Text('Franchise totale'),
                 ),
               ],
@@ -278,10 +383,16 @@ class _LoanSimulationScreenState extends State<LoanSimulationScreen> {
               value: _dureeDiffereMois.toDouble(),
               step: 1,
               decimals: 0,
-              onChanged: (v) => setState(() => _dureeDiffereMois = v.round().clamp(1, _dureeAnnees * 12 - 1)),
+              onChanged: (v) => _update(() => _dureeDiffereMois = v.round().clamp(1, _dureeAnnees * 12 - 1)),
             ),
           ],
         ],
+        const SizedBox(height: 12),
+        OutlineButton(
+          onPressed: _resetState,
+          leading: const Icon(LucideIcons.refreshCw),
+          child: const shadcn.Text('Réinitialiser les paramètres'),
+        ),
       ],
     );
   }
@@ -537,7 +648,7 @@ class _SimpleSwitch extends StatelessWidget {
 // Champ numérique (identique en esprit à celui de la page Simulation)
 // ---------------------------------------------------------------------
 
-class _NumberField extends StatelessWidget {
+class _NumberField extends StatefulWidget {
   final String label;
   final String suffix;
   final double value;
@@ -554,30 +665,62 @@ class _NumberField extends StatelessWidget {
     this.decimals = 0,
   });
 
-  String get _text => decimals == 0
+  @override
+  State<_NumberField> createState() => _NumberFieldState();
+}
+
+class _NumberFieldState extends State<_NumberField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _textFor(widget.value));
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NumberField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newText = _textFor(widget.value);
+    if (!_focusNode.hasFocus && _controller.text != newText) {
+      _controller.text = newText;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  String _textFor(double value) => widget.decimals == 0
       ? value.round().toString()
-      : value.toStringAsFixed(decimals).replaceAll('.', ',');
+      : value.toStringAsFixed(widget.decimals).replaceAll('.', ',');
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        shadcn.Text(label).muted().small(),
+        shadcn.Text(widget.label).muted().small(),
         const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
               child: TextField(
-                key: ValueKey('$label-$_text'),
-                initialValue: _text,
+                controller: _controller,
+                focusNode: _focusNode,
                 border: Border.all(color: Colors.transparent),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (text) {
                   final parsed = double.tryParse(text.replaceAll(',', '.'));
-                  if (parsed != null) onChanged(parsed);
+                  if (parsed != null) widget.onChanged(parsed);
                 },
+                onSubmitted: (_) => _controller.text = _textFor(widget.value),
               ),
             ),
             Column(
@@ -585,16 +728,16 @@ class _NumberField extends StatelessWidget {
               children: [
                 IconButton.ghost(
                   icon: const Icon(LucideIcons.chevronUp, size: 14),
-                  onPressed: () => onChanged(value + step),
+                  onPressed: () => widget.onChanged(widget.value + widget.step),
                 ),
                 IconButton.ghost(
                   icon: const Icon(LucideIcons.chevronDown, size: 14),
-                  onPressed: () => onChanged(value - step),
+                  onPressed: () => widget.onChanged(widget.value - widget.step),
                 ),
               ],
             ),
             const SizedBox(width: 4),
-            shadcn.Text(suffix).muted(),
+            shadcn.Text(widget.suffix).muted(),
           ],
         ),
         const Divider(),

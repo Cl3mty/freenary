@@ -3,10 +3,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
+import '../../core/simulations/simulation_state_repository.dart';
 import '../../core/ui/frosted_card.dart';
 
 class WealthSimulationScreen extends StatefulWidget {
-  const WealthSimulationScreen({super.key});
+  final String vaultPath;
+
+  const WealthSimulationScreen({super.key, required this.vaultPath});
 
   @override
   State<WealthSimulationScreen> createState() => _WealthSimulationScreenState();
@@ -14,6 +17,33 @@ class WealthSimulationScreen extends StatefulWidget {
 
 class _WealthSimulationScreenState extends State<WealthSimulationScreen> {
   int _tabIndex = 0;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('wealth');
+    if (!mounted) return;
+    setState(() {
+      _tabIndex = _readInt(data, 'tabIndex', fallback: _tabIndex).clamp(0, 1);
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('wealth', {'tabIndex': _tabIndex});
+  }
+
+  int _readInt(Map<String, dynamic> json, String key, {required int fallback}) {
+    final value = json[key];
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return fallback;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +57,10 @@ class _WealthSimulationScreenState extends State<WealthSimulationScreen> {
             children: [
               TabList(
                 index: _tabIndex,
-                onChanged: (value) => setState(() => _tabIndex = value),
+                onChanged: (value) {
+                  setState(() => _tabIndex = value);
+                  _saveState();
+                },
                 children: const [
                   TabItem(child: shadcn.Text('Déterministe (Intérêts composés)')),
                   TabItem(child: shadcn.Text('Stochastique (Monte-Carlo)')),
@@ -37,7 +70,9 @@ class _WealthSimulationScreenState extends State<WealthSimulationScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _tabIndex == 0 ? const _SimpleSimulationTab() : const _MonteCarloSimulationTab(),
+            child: _tabIndex == 0
+                ? _SimpleSimulationTab(vaultPath: widget.vaultPath)
+                : _MonteCarloSimulationTab(vaultPath: widget.vaultPath),
           ),
         ],
       ),
@@ -187,6 +222,12 @@ double _gaussian(Random rng, double mean, double stddev) {
   return mean + z0 * stddev;
 }
 
+double _monthlyRateFromAnnualPct(double annualPct) {
+  final annualGrowthFactor = (1 + annualPct / 100).clamp(0.0, double.infinity);
+  if (annualGrowthFactor == 0) return -1;
+  return pow(annualGrowthFactor, 1 / 12).toDouble() - 1;
+}
+
 double _niceCeil(double value) {
   if (value <= 0) return 100;
   var magnitude = 1.0;
@@ -211,7 +252,7 @@ double _niceCeil(double value) {
 // Champ numérique et slider partagés par les deux onglets
 // =======================================================================
 
-class _NumberField extends StatelessWidget {
+class _NumberField extends StatefulWidget {
   final String label;
   final String suffix;
   final double value;
@@ -228,30 +269,62 @@ class _NumberField extends StatelessWidget {
     this.decimals = 0,
   });
 
-  String get _text => decimals == 0
+  @override
+  State<_NumberField> createState() => _NumberFieldState();
+}
+
+class _NumberFieldState extends State<_NumberField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _textFor(widget.value));
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NumberField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newText = _textFor(widget.value);
+    if (!_focusNode.hasFocus && _controller.text != newText) {
+      _controller.text = newText;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  String _textFor(double value) => widget.decimals == 0
       ? value.round().toString()
-      : value.toStringAsFixed(decimals).replaceAll('.', ',');
+      : value.toStringAsFixed(widget.decimals).replaceAll('.', ',');
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        shadcn.Text(label).muted().small(),
+        shadcn.Text(widget.label).muted().small(),
         const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
               child: TextField(
-                key: ValueKey('$label-$_text'),
-                initialValue: _text,
+                controller: _controller,
+                focusNode: _focusNode,
                 border: Border.all(color: Colors.transparent),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (text) {
                   final parsed = double.tryParse(text.replaceAll(',', '.'));
-                  if (parsed != null) onChanged(parsed);
+                  if (parsed != null) widget.onChanged(parsed);
                 },
+                onSubmitted: (_) => _controller.text = _textFor(widget.value),
               ),
             ),
             Column(
@@ -259,16 +332,16 @@ class _NumberField extends StatelessWidget {
               children: [
                 IconButton.ghost(
                   icon: const Icon(LucideIcons.chevronUp, size: 14),
-                  onPressed: () => onChanged(value + step),
+                  onPressed: () => widget.onChanged(widget.value + widget.step),
                 ),
                 IconButton.ghost(
                   icon: const Icon(LucideIcons.chevronDown, size: 14),
-                  onPressed: () => onChanged(value - step),
+                  onPressed: () => widget.onChanged(widget.value - widget.step),
                 ),
               ],
             ),
             const SizedBox(width: 4),
-            shadcn.Text(suffix).muted(),
+            shadcn.Text(widget.suffix).muted(),
           ],
         ),
         const Divider(),
@@ -423,7 +496,9 @@ class _StatColumn extends StatelessWidget {
 // =======================================================================
 
 class _SimpleSimulationTab extends StatefulWidget {
-  const _SimpleSimulationTab();
+  final String vaultPath;
+
+  const _SimpleSimulationTab({required this.vaultPath});
 
   @override
   State<_SimpleSimulationTab> createState() => _SimpleSimulationTabState();
@@ -432,7 +507,7 @@ class _SimpleSimulationTab extends StatefulWidget {
 class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
   double _patrimoineActuel = 100000;
   double _repartitionInitialeBourse = 50;
-  double _investissementsAnnuels = 6000;
+  double _investissementsMensuels = 500;
   double _repartitionInvestBourse = 50;
   int _nombreAnnees = 20;
   double _rendementBourse = 8;
@@ -441,6 +516,84 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
   double _impositionAutre = 31.4;
   double _tauxRetrait = 4;
   double _tauxInflation = 3;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('wealth_simple');
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      _patrimoineActuel = _readDouble(data, 'patrimoineActuel', fallback: _patrimoineActuel);
+      _repartitionInitialeBourse = _readDouble(data, 'repartitionInitialeBourse', fallback: _repartitionInitialeBourse).clamp(0, 100);
+      _investissementsMensuels = _readDouble(data, 'investissementsMensuels', fallback: _investissementsMensuels);
+      _repartitionInvestBourse = _readDouble(data, 'repartitionInvestBourse', fallback: _repartitionInvestBourse).clamp(0, 100);
+      _nombreAnnees = _readInt(data, 'nombreAnnees', fallback: _nombreAnnees).clamp(1, 60);
+      _rendementBourse = _readDouble(data, 'rendementBourse', fallback: _rendementBourse);
+      _rendementAutre = _readDouble(data, 'rendementAutre', fallback: _rendementAutre);
+      _impositionBourse = _readDouble(data, 'impositionBourse', fallback: _impositionBourse);
+      _impositionAutre = _readDouble(data, 'impositionAutre', fallback: _impositionAutre);
+      _tauxRetrait = _readDouble(data, 'tauxRetrait', fallback: _tauxRetrait);
+      _tauxInflation = _readDouble(data, 'tauxInflation', fallback: _tauxInflation);
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('wealth_simple', {
+      'patrimoineActuel': _patrimoineActuel,
+      'repartitionInitialeBourse': _repartitionInitialeBourse,
+      'investissementsMensuels': _investissementsMensuels,
+      'repartitionInvestBourse': _repartitionInvestBourse,
+      'nombreAnnees': _nombreAnnees,
+      'rendementBourse': _rendementBourse,
+      'rendementAutre': _rendementAutre,
+      'impositionBourse': _impositionBourse,
+      'impositionAutre': _impositionAutre,
+      'tauxRetrait': _tauxRetrait,
+      'tauxInflation': _tauxInflation,
+    });
+  }
+
+  void _update(void Function() change) {
+    setState(change);
+    _saveState();
+  }
+
+  Future<void> _resetState() async {
+    await _stateRepo.delete('wealth_simple');
+    if (!mounted) return;
+    setState(() {
+      _patrimoineActuel = 100000;
+      _repartitionInitialeBourse = 50;
+      _investissementsMensuels = 500;
+      _repartitionInvestBourse = 50;
+      _nombreAnnees = 20;
+      _rendementBourse = 8;
+      _rendementAutre = 5;
+      _impositionBourse = 18.6;
+      _impositionAutre = 31.4;
+      _tauxRetrait = 4;
+      _tauxInflation = 3;
+    });
+  }
+
+  double _readDouble(Map<String, dynamic> json, String key, {required double fallback}) {
+    final value = json[key];
+    if (value is num) return value.toDouble();
+    return fallback;
+  }
+
+  int _readInt(Map<String, dynamic> json, String key, {required int fallback}) {
+    final value = json[key];
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return fallback;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -454,8 +607,11 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
   _SimulationResult _compute() {
     final initialBourse = _patrimoineActuel * _repartitionInitialeBourse / 100;
     final initialAutre = _patrimoineActuel * (100 - _repartitionInitialeBourse) / 100;
-    final investBourse = _investissementsAnnuels * _repartitionInvestBourse / 100;
-    final investAutre = _investissementsAnnuels * (100 - _repartitionInvestBourse) / 100;
+    final investBourseMensuel = _investissementsMensuels * _repartitionInvestBourse / 100;
+    final investAutreMensuel = _investissementsMensuels * (100 - _repartitionInvestBourse) / 100;
+    final monthlyRateBourse = _monthlyRateFromAnnualPct(_rendementBourse);
+    final monthlyRateAutre = _monthlyRateFromAnnualPct(_rendementAutre);
+    final totalMonths = _nombreAnnees * 12;
 
     var bourse = initialBourse;
     var autre = initialAutre;
@@ -464,19 +620,22 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
       _YearPoint(year: 0, principal: _patrimoineActuel, total: _patrimoineActuel),
     ];
 
-    for (var year = 1; year <= _nombreAnnees; year++) {
-      bourse = bourse * (1 + _rendementBourse / 100) + investBourse;
-      autre = autre * (1 + _rendementAutre / 100) + investAutre;
-      final principal = _patrimoineActuel + _investissementsAnnuels * year;
-      points.add(_YearPoint(year: year, principal: principal, total: bourse + autre));
+    for (var month = 1; month <= totalMonths; month++) {
+      bourse = bourse * (1 + monthlyRateBourse) + investBourseMensuel;
+      autre = autre * (1 + monthlyRateAutre) + investAutreMensuel;
+      if (month % 12 == 0) {
+        final year = month ~/ 12;
+        final principal = _patrimoineActuel + _investissementsMensuels * month;
+        points.add(_YearPoint(year: year, principal: principal, total: bourse + autre));
+      }
     }
 
     final valeurFuture = bourse + autre;
-    final versements = _investissementsAnnuels * _nombreAnnees;
+    final versements = _investissementsMensuels * totalMonths;
     final plusValue = valeurFuture - _patrimoineActuel - versements;
 
-    final contributionsBourse = initialBourse + investBourse * _nombreAnnees;
-    final contributionsAutre = initialAutre + investAutre * _nombreAnnees;
+    final contributionsBourse = initialBourse + investBourseMensuel * totalMonths;
+    final contributionsAutre = initialAutre + investAutreMensuel * totalMonths;
     final gainsBourse = (bourse - contributionsBourse).clamp(0, double.infinity);
     final gainsAutre = (autre - contributionsAutre).clamp(0, double.infinity);
     final taxes = gainsBourse * _impositionBourse / 100 + gainsAutre * _impositionAutre / 100;
@@ -504,28 +663,28 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
           suffix: '€',
           value: _patrimoineActuel,
           step: 1000,
-          onChanged: (v) => setState(() => _patrimoineActuel = v),
+          onChanged: (v) => _update(() => _patrimoineActuel = v),
         ),
         _SplitSlider(
           label: 'Répartition de votre patrimoine initial',
           leftLabel: 'Bourse',
           rightLabel: 'Autre',
           value: _repartitionInitialeBourse,
-          onChanged: (v) => setState(() => _repartitionInitialeBourse = v),
+          onChanged: (v) => _update(() => _repartitionInitialeBourse = v),
         ),
         _NumberField(
-          label: 'Investissements annuels',
+          label: 'Investissements mensuels',
           suffix: '€',
-          value: _investissementsAnnuels,
-          step: 500,
-          onChanged: (v) => setState(() => _investissementsAnnuels = v),
+          value: _investissementsMensuels,
+          step: 50,
+          onChanged: (v) => _update(() => _investissementsMensuels = v),
         ),
         _SplitSlider(
           label: 'Répartition des investissements',
           leftLabel: 'Bourse',
           rightLabel: 'Autre',
           value: _repartitionInvestBourse,
-          onChanged: (v) => setState(() => _repartitionInvestBourse = v),
+          onChanged: (v) => _update(() => _repartitionInvestBourse = v),
         ),
         _NumberField(
           label: "Nombre d'années d'épargne",
@@ -533,7 +692,7 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
           value: _nombreAnnees.toDouble(),
           step: 1,
           decimals: 0,
-          onChanged: (v) => setState(() => _nombreAnnees = v.round().clamp(1, 60)),
+          onChanged: (v) => _update(() => _nombreAnnees = v.round().clamp(1, 60)),
         ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -545,7 +704,7 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
                 value: _rendementBourse,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _rendementBourse = v),
+                onChanged: (v) => _update(() => _rendementBourse = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -556,7 +715,7 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
                 value: _rendementAutre,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _rendementAutre = v),
+                onChanged: (v) => _update(() => _rendementAutre = v),
               ),
             ),
           ],
@@ -571,7 +730,7 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
                 value: _impositionBourse,
                 step: 0.1,
                 decimals: 1,
-                onChanged: (v) => setState(() => _impositionBourse = v),
+                onChanged: (v) => _update(() => _impositionBourse = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -582,7 +741,7 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
                 value: _impositionAutre,
                 step: 0.1,
                 decimals: 1,
-                onChanged: (v) => setState(() => _impositionAutre = v),
+                onChanged: (v) => _update(() => _impositionAutre = v),
               ),
             ),
           ],
@@ -597,7 +756,7 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
                 value: _tauxRetrait,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _tauxRetrait = v),
+                onChanged: (v) => _update(() => _tauxRetrait = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -608,10 +767,16 @@ class _SimpleSimulationTabState extends State<_SimpleSimulationTab> {
                 value: _tauxInflation,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _tauxInflation = v),
+                onChanged: (v) => _update(() => _tauxInflation = v),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        OutlineButton(
+          onPressed: _resetState,
+          leading: const Icon(LucideIcons.refreshCw),
+          child: const shadcn.Text('Réinitialiser les paramètres'),
         ),
       ],
     );
@@ -1054,7 +1219,9 @@ class _ProjectionChartPainter extends CustomPainter {
 // =======================================================================
 
 class _MonteCarloSimulationTab extends StatefulWidget {
-  const _MonteCarloSimulationTab();
+  final String vaultPath;
+
+  const _MonteCarloSimulationTab({required this.vaultPath});
 
   @override
   State<_MonteCarloSimulationTab> createState() => _MonteCarloSimulationTabState();
@@ -1063,7 +1230,7 @@ class _MonteCarloSimulationTab extends StatefulWidget {
 class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
   double _patrimoineActuel = 100000;
   double _repartitionInitialeBourse = 50;
-  double _investissementsAnnuels = 6000;
+  double _investissementsMensuels = 500;
   double _repartitionInvestBourse = 50;
   int _nombreAnnees = 20;
   double _rendementBourse = 8;
@@ -1074,6 +1241,90 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
   double _impositionAutre = 31.4;
   double _tauxRetrait = 4;
   int _nombreSimulations = 300;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('wealth_monte_carlo');
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      _patrimoineActuel = _readDouble(data, 'patrimoineActuel', fallback: _patrimoineActuel);
+      _repartitionInitialeBourse = _readDouble(data, 'repartitionInitialeBourse', fallback: _repartitionInitialeBourse).clamp(0, 100);
+      _investissementsMensuels = _readDouble(data, 'investissementsMensuels', fallback: _investissementsMensuels);
+      _repartitionInvestBourse = _readDouble(data, 'repartitionInvestBourse', fallback: _repartitionInvestBourse).clamp(0, 100);
+      _nombreAnnees = _readInt(data, 'nombreAnnees', fallback: _nombreAnnees).clamp(1, 60);
+      _rendementBourse = _readDouble(data, 'rendementBourse', fallback: _rendementBourse);
+      _ecartTypeBourse = _readDouble(data, 'ecartTypeBourse', fallback: _ecartTypeBourse);
+      _rendementAutre = _readDouble(data, 'rendementAutre', fallback: _rendementAutre);
+      _ecartTypeAutre = _readDouble(data, 'ecartTypeAutre', fallback: _ecartTypeAutre);
+      _impositionBourse = _readDouble(data, 'impositionBourse', fallback: _impositionBourse);
+      _impositionAutre = _readDouble(data, 'impositionAutre', fallback: _impositionAutre);
+      _tauxRetrait = _readDouble(data, 'tauxRetrait', fallback: _tauxRetrait);
+      _nombreSimulations = _readInt(data, 'nombreSimulations', fallback: _nombreSimulations).clamp(50, 2000);
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('wealth_monte_carlo', {
+      'patrimoineActuel': _patrimoineActuel,
+      'repartitionInitialeBourse': _repartitionInitialeBourse,
+      'investissementsMensuels': _investissementsMensuels,
+      'repartitionInvestBourse': _repartitionInvestBourse,
+      'nombreAnnees': _nombreAnnees,
+      'rendementBourse': _rendementBourse,
+      'ecartTypeBourse': _ecartTypeBourse,
+      'rendementAutre': _rendementAutre,
+      'ecartTypeAutre': _ecartTypeAutre,
+      'impositionBourse': _impositionBourse,
+      'impositionAutre': _impositionAutre,
+      'tauxRetrait': _tauxRetrait,
+      'nombreSimulations': _nombreSimulations,
+    });
+  }
+
+  void _update(void Function() change) {
+    setState(change);
+    _saveState();
+  }
+
+  Future<void> _resetState() async {
+    await _stateRepo.delete('wealth_monte_carlo');
+    if (!mounted) return;
+    setState(() {
+      _patrimoineActuel = 100000;
+      _repartitionInitialeBourse = 50;
+      _investissementsMensuels = 500;
+      _repartitionInvestBourse = 50;
+      _nombreAnnees = 20;
+      _rendementBourse = 8;
+      _ecartTypeBourse = 15;
+      _rendementAutre = 5;
+      _ecartTypeAutre = 4;
+      _impositionBourse = 18.6;
+      _impositionAutre = 31.4;
+      _tauxRetrait = 4;
+      _nombreSimulations = 300;
+    });
+  }
+
+  double _readDouble(Map<String, dynamic> json, String key, {required double fallback}) {
+    final value = json[key];
+    if (value is num) return value.toDouble();
+    return fallback;
+  }
+
+  int _readInt(Map<String, dynamic> json, String key, {required int fallback}) {
+    final value = json[key];
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return fallback;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1088,8 +1339,9 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
     final rng = Random(12345); // seed fixe : la courbe ne bouge que si les paramètres changent
     final initialBourse = _patrimoineActuel * _repartitionInitialeBourse / 100;
     final initialAutre = _patrimoineActuel * (100 - _repartitionInitialeBourse) / 100;
-    final investBourse = _investissementsAnnuels * _repartitionInvestBourse / 100;
-    final investAutre = _investissementsAnnuels * (100 - _repartitionInvestBourse) / 100;
+    final investBourseMensuel = _investissementsMensuels * _repartitionInvestBourse / 100;
+    final investAutreMensuel = _investissementsMensuels * (100 - _repartitionInvestBourse) / 100;
+    final totalMonths = _nombreAnnees * 12;
 
     final nSims = _nombreSimulations;
     final totalsByYear = List.generate(_nombreAnnees + 1, (_) => <double>[]);
@@ -1102,12 +1354,16 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
       for (var year = 1; year <= _nombreAnnees; year++) {
         final rBourse = _gaussian(rng, _rendementBourse, _ecartTypeBourse);
         final rAutre = _gaussian(rng, _rendementAutre, _ecartTypeAutre);
-        bourse = bourse * (1 + rBourse / 100) + investBourse;
-        autre = autre * (1 + rAutre / 100) + investAutre;
+        final monthlyRateBourse = _monthlyRateFromAnnualPct(rBourse);
+        final monthlyRateAutre = _monthlyRateFromAnnualPct(rAutre);
+        for (var monthInYear = 0; monthInYear < 12; monthInYear++) {
+          bourse = bourse * (1 + monthlyRateBourse) + investBourseMensuel;
+          autre = autre * (1 + monthlyRateAutre) + investAutreMensuel;
+        }
         totalsByYear[year].add(bourse + autre);
       }
-      final contributionsBourse = initialBourse + investBourse * _nombreAnnees;
-      final contributionsAutre = initialAutre + investAutre * _nombreAnnees;
+      final contributionsBourse = initialBourse + investBourseMensuel * totalMonths;
+      final contributionsAutre = initialAutre + investAutreMensuel * totalMonths;
       final gainsBourse = (bourse - contributionsBourse).clamp(0, double.infinity);
       final gainsAutre = (autre - contributionsAutre).clamp(0, double.infinity);
       final taxes = gainsBourse * _impositionBourse / 100 + gainsAutre * _impositionAutre / 100;
@@ -1124,7 +1380,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
       final sorted = [...totalsByYear[year]]..sort();
       points.add(_MCYearPoint(
         year: year,
-        principal: _patrimoineActuel + _investissementsAnnuels * year,
+        principal: _patrimoineActuel + _investissementsMensuels * year * 12,
         p10: percentile(sorted, 0.10),
         p50: percentile(sorted, 0.50),
         p90: percentile(sorted, 0.90),
@@ -1135,7 +1391,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
     final valeurNetteMediane = percentile(sortedNet, 0.50);
     final valeurNetteP10 = percentile(sortedNet, 0.10);
     final valeurNetteP90 = percentile(sortedNet, 0.90);
-    final versements = _investissementsAnnuels * _nombreAnnees;
+    final versements = _investissementsMensuels * totalMonths;
     final valeurFutureMediane = points.last.p50;
     final plusValueMediane = valeurFutureMediane - _patrimoineActuel - versements;
     final revenuMensuelMedian = valeurNetteMediane * _tauxRetrait / 100 / 12;
@@ -1163,28 +1419,28 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
           suffix: '€',
           value: _patrimoineActuel,
           step: 1000,
-          onChanged: (v) => setState(() => _patrimoineActuel = v),
+          onChanged: (v) => _update(() => _patrimoineActuel = v),
         ),
         _SplitSlider(
           label: 'Répartition de votre patrimoine initial',
           leftLabel: 'Bourse',
           rightLabel: 'Autre',
           value: _repartitionInitialeBourse,
-          onChanged: (v) => setState(() => _repartitionInitialeBourse = v),
+          onChanged: (v) => _update(() => _repartitionInitialeBourse = v),
         ),
         _NumberField(
-          label: 'Investissements annuels',
+          label: 'Investissements mensuels',
           suffix: '€',
-          value: _investissementsAnnuels,
-          step: 500,
-          onChanged: (v) => setState(() => _investissementsAnnuels = v),
+          value: _investissementsMensuels,
+          step: 50,
+          onChanged: (v) => _update(() => _investissementsMensuels = v),
         ),
         _SplitSlider(
           label: 'Répartition des investissements',
           leftLabel: 'Bourse',
           rightLabel: 'Autre',
           value: _repartitionInvestBourse,
-          onChanged: (v) => setState(() => _repartitionInvestBourse = v),
+          onChanged: (v) => _update(() => _repartitionInvestBourse = v),
         ),
         _NumberField(
           label: "Nombre d'années d'épargne",
@@ -1192,7 +1448,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
           value: _nombreAnnees.toDouble(),
           step: 1,
           decimals: 0,
-          onChanged: (v) => setState(() => _nombreAnnees = v.round().clamp(1, 60)),
+          onChanged: (v) => _update(() => _nombreAnnees = v.round().clamp(1, 60)),
         ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1204,7 +1460,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _rendementBourse,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _rendementBourse = v),
+                onChanged: (v) => _update(() => _rendementBourse = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -1215,7 +1471,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _ecartTypeBourse,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _ecartTypeBourse = v),
+                onChanged: (v) => _update(() => _ecartTypeBourse = v),
               ),
             ),
           ],
@@ -1230,7 +1486,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _rendementAutre,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _rendementAutre = v),
+                onChanged: (v) => _update(() => _rendementAutre = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -1241,7 +1497,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _ecartTypeAutre,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _ecartTypeAutre = v),
+                onChanged: (v) => _update(() => _ecartTypeAutre = v),
               ),
             ),
           ],
@@ -1256,7 +1512,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _impositionBourse,
                 step: 0.1,
                 decimals: 1,
-                onChanged: (v) => setState(() => _impositionBourse = v),
+                onChanged: (v) => _update(() => _impositionBourse = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -1267,7 +1523,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _impositionAutre,
                 step: 0.1,
                 decimals: 1,
-                onChanged: (v) => setState(() => _impositionAutre = v),
+                onChanged: (v) => _update(() => _impositionAutre = v),
               ),
             ),
           ],
@@ -1282,7 +1538,7 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _tauxRetrait,
                 step: 0.5,
                 decimals: 1,
-                onChanged: (v) => setState(() => _tauxRetrait = v),
+                onChanged: (v) => _update(() => _tauxRetrait = v),
               ),
             ),
             const SizedBox(width: 12),
@@ -1293,10 +1549,16 @@ class _MonteCarloSimulationTabState extends State<_MonteCarloSimulationTab> {
                 value: _nombreSimulations.toDouble(),
                 step: 50,
                 decimals: 0,
-                onChanged: (v) => setState(() => _nombreSimulations = v.round().clamp(50, 2000)),
+                onChanged: (v) => _update(() => _nombreSimulations = v.round().clamp(50, 2000)),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        OutlineButton(
+          onPressed: _resetState,
+          leading: const Icon(LucideIcons.refreshCw),
+          child: const shadcn.Text('Réinitialiser les paramètres'),
         ),
       ],
     );

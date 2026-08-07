@@ -1,6 +1,9 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme_controller.dart';
 import '../../core/storage/vault_folder_service.dart';
+import '../../core/updates/update_checker.dart';
 import '../../core/ui/frosted_card.dart';
 import '../../core/profiles/profile_controller.dart';
 import '../../core/profiles/sidebar_prefs_controller.dart';
@@ -14,6 +17,8 @@ class SettingsScreen extends StatelessWidget {
   final ThemeController themeController;
   final ProfileController profileController;
   final SidebarPrefsController sidebarPrefsController;
+  final String githubOwner;
+  final String githubRepo;
 
   const SettingsScreen({
     super.key,
@@ -24,6 +29,8 @@ class SettingsScreen extends StatelessWidget {
     required this.themeController,
     required this.profileController,
     required this.sidebarPrefsController,
+    required this.githubOwner,
+    required this.githubRepo,
   });
 
   @override
@@ -39,6 +46,8 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _ThemeCard(themeController: themeController),
             const SizedBox(height: 16),
+            _VersionCard(githubOwner: githubOwner, githubRepo: githubRepo),
+            const SizedBox(height: 16),
             SidebarVisibilityCard(
               profileController: profileController,
               sidebarPrefsController: sidebarPrefsController,
@@ -52,6 +61,126 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _DebugCard(vaultFolderService: vaultFolderService, onVaultReset: onVaultReset),
             const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VersionCard extends StatefulWidget {
+  final String githubOwner;
+  final String githubRepo;
+
+  const _VersionCard({required this.githubOwner, required this.githubRepo});
+
+  @override
+  State<_VersionCard> createState() => _VersionCardState();
+}
+
+class _VersionCardState extends State<_VersionCard> {
+  bool _loading = true;
+  String? _error;
+  String _currentVersion = '-';
+  UpdateInfo? _update;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final checker = UpdateChecker(
+        githubOwner: widget.githubOwner,
+        githubRepo: widget.githubRepo,
+      );
+      final update = await checker.checkForUpdate();
+      if (!mounted) return;
+      setState(() {
+        _currentVersion = packageInfo.version;
+        _update = update;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Impossible de vérifier la version : $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _downloadAndInstall() async {
+    if (_update == null) return;
+    final uri = Uri.parse(_update!.downloadUrl);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openReleaseNotes() async {
+    if (_update == null || _update!.releaseNotesUrl.isEmpty) return;
+    final uri = Uri.parse(_update!.releaseNotesUrl);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final muted = Theme.of(context).colorScheme.mutedForeground;
+
+    return FrostedCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Version et mises à jour').large().medium(),
+            const SizedBox(height: 8),
+            Text('Version installée : $_currentVersion').muted(),
+            const SizedBox(height: 12),
+            if (_loading)
+              Row(
+                children: [
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 10),
+                  const Text('Vérification des releases GitHub...').muted(),
+                ],
+              )
+            else if (_error != null)
+              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.destructive))
+            else if (_update != null) ...[
+              Text(
+                'Nouvelle version détectée : ${_update!.latestVersion}',
+                style: TextStyle(color: accent, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  PrimaryButton(
+                    onPressed: _downloadAndInstall,
+                    leading: const Icon(LucideIcons.download),
+                    child: const Text('Télécharger et installer'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlineButton(
+                    onPressed: _openReleaseNotes,
+                    leading: const Icon(LucideIcons.externalLink),
+                    child: const Text('Voir la release'),
+                  ),
+                ],
+              ),
+            ] else
+              Row(
+                children: [
+                  Icon(LucideIcons.circleCheckBig, size: 16, color: accent),
+                  const SizedBox(width: 8),
+                  Text('Vous êtes à jour.', style: TextStyle(color: muted)),
+                ],
+              ),
           ],
         ),
       ),

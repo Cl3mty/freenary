@@ -3,10 +3,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart' show Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' hide Colors;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn show Text;
+import '../../core/simulations/simulation_state_repository.dart';
 import '../../core/ui/frosted_card.dart';
 
 class TaxationSimulationScreen extends StatefulWidget {
-  const TaxationSimulationScreen({super.key});
+  final String vaultPath;
+
+  const TaxationSimulationScreen({super.key, required this.vaultPath});
 
   @override
   State<TaxationSimulationScreen> createState() => _TaxationScreenState();
@@ -14,6 +17,31 @@ class TaxationSimulationScreen extends StatefulWidget {
 
 class _TaxationScreenState extends State<TaxationSimulationScreen> {
   int _tabIndex = 0;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('taxation');
+    if (!mounted) return;
+    setState(() {
+      final tabValue = data['tabIndex'];
+      if (tabValue is int) {
+        _tabIndex = tabValue.clamp(0, 1);
+      } else if (tabValue is num) {
+        _tabIndex = tabValue.round().clamp(0, 1);
+      }
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('taxation', {'tabIndex': _tabIndex});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +55,10 @@ class _TaxationScreenState extends State<TaxationSimulationScreen> {
             children: [
               TabList(
                 index: _tabIndex,
-                onChanged: (value) => setState(() => _tabIndex = value),
+                onChanged: (value) {
+                  setState(() => _tabIndex = value);
+                  _saveState();
+                },
                 children: const [
                   TabItem(child: shadcn.Text('IFI')),
                   TabItem(child: shadcn.Text('Impôt sur le revenu')),
@@ -37,7 +68,7 @@ class _TaxationScreenState extends State<TaxationSimulationScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _tabIndex == 0 ? const _IFITab() : const _IRTab(),
+            child: _tabIndex == 0 ? _IFITab(vaultPath: widget.vaultPath) : _IRTab(vaultPath: widget.vaultPath),
           ),
         ],
       ),
@@ -196,7 +227,7 @@ class _BracketRow {
   _BracketRow({required this.label, required this.montant, required this.montantMax, required this.impot});
 }
 
-class _NumberField extends StatelessWidget {
+class _NumberField extends StatefulWidget {
   final String label;
   final String suffix;
   final double value;
@@ -213,30 +244,62 @@ class _NumberField extends StatelessWidget {
     this.decimals = 0,
   });
 
-  String get _text => decimals == 0
+  @override
+  State<_NumberField> createState() => _NumberFieldState();
+}
+
+class _NumberFieldState extends State<_NumberField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _textFor(widget.value));
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NumberField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newText = _textFor(widget.value);
+    if (!_focusNode.hasFocus && _controller.text != newText) {
+      _controller.text = newText;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  String _textFor(double value) => widget.decimals == 0
       ? value.round().toString()
-      : value.toStringAsFixed(decimals).replaceAll('.', ',');
+      : value.toStringAsFixed(widget.decimals).replaceAll('.', ',');
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        shadcn.Text(label).muted().small(),
+        shadcn.Text(widget.label).muted().small(),
         const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
               child: TextField(
-                key: ValueKey('$label-$_text'),
-                initialValue: _text,
+                controller: _controller,
+                focusNode: _focusNode,
                 border: Border.all(color: Colors.transparent),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (text) {
                   final parsed = double.tryParse(text.replaceAll(',', '.'));
-                  if (parsed != null) onChanged(parsed);
+                  if (parsed != null) widget.onChanged(parsed);
                 },
+                onSubmitted: (_) => _controller.text = _textFor(widget.value),
               ),
             ),
             Column(
@@ -244,16 +307,16 @@ class _NumberField extends StatelessWidget {
               children: [
                 IconButton.ghost(
                   icon: const Icon(LucideIcons.chevronUp, size: 14),
-                  onPressed: () => onChanged(value + step),
+                  onPressed: () => widget.onChanged(widget.value + widget.step),
                 ),
                 IconButton.ghost(
                   icon: const Icon(LucideIcons.chevronDown, size: 14),
-                  onPressed: () => onChanged(value - step),
+                  onPressed: () => widget.onChanged(widget.value - widget.step),
                 ),
               ],
             ),
             const SizedBox(width: 4),
-            shadcn.Text(suffix).muted(),
+            shadcn.Text(widget.suffix).muted(),
           ],
         ),
         const Divider(),
@@ -311,7 +374,9 @@ class _IFIResult {
 }
 
 class _IFITab extends StatefulWidget {
-  const _IFITab();
+  final String vaultPath;
+
+  const _IFITab({required this.vaultPath});
 
   @override
   State<_IFITab> createState() => _IFITabState();
@@ -319,6 +384,35 @@ class _IFITab extends StatefulWidget {
 
 class _IFITabState extends State<_IFITab> {
   double _immobilierNet = 2000000;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('taxation_ifi');
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      final value = data['immobilierNet'];
+      if (value is num) _immobilierNet = value.toDouble();
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('taxation_ifi', {'immobilierNet': _immobilierNet});
+  }
+
+  Future<void> _resetState() async {
+    await _stateRepo.delete('taxation_ifi');
+    if (!mounted) return;
+    setState(() {
+      _immobilierNet = 2000000;
+    });
+  }
 
   static const _limits = [800000.0, 1300000.0, 2570000.0, 5000000.0, 10000000.0];
   static const _rates = [0.0, 0.5, 0.7, 1.0, 1.25, 1.5];
@@ -361,12 +455,26 @@ class _IFITabState extends State<_IFITab> {
     final red = const Color(0xFFE07A6B);
 
     return _TaxationSplitCard(
-      left: _NumberField(
-        label: 'Patrimoine immobilier net',
-        suffix: '€',
-        value: _immobilierNet,
-        step: 50000,
-        onChanged: (v) => setState(() => _immobilierNet = v),
+      left: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _NumberField(
+            label: 'Patrimoine immobilier net',
+            suffix: '€',
+            value: _immobilierNet,
+            step: 50000,
+            onChanged: (v) {
+              setState(() => _immobilierNet = v);
+              _saveState();
+            },
+          ),
+          const SizedBox(height: 8),
+          OutlineButton(
+            onPressed: _resetState,
+            leading: const Icon(LucideIcons.refreshCw),
+            child: const shadcn.Text('Réinitialiser les paramètres'),
+          ),
+        ],
       ),
       right: Column(
         children: [
@@ -449,7 +557,9 @@ class _IRResult {
 }
 
 class _IRTab extends StatefulWidget {
-  const _IRTab();
+  final String vaultPath;
+
+  const _IRTab({required this.vaultPath});
 
   @override
   State<_IRTab> createState() => _IRTabState();
@@ -458,6 +568,41 @@ class _IRTab extends StatefulWidget {
 class _IRTabState extends State<_IRTab> {
   double _netImposable = 150000;
   double _nbrParts = 1;
+  late final SimulationStateRepository _stateRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateRepo = SimulationStateRepository(widget.vaultPath);
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    final data = await _stateRepo.read('taxation_ir');
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      final netImposable = data['netImposable'];
+      final nbrParts = data['nbrParts'];
+      if (netImposable is num) _netImposable = netImposable.toDouble();
+      if (nbrParts is num) _nbrParts = nbrParts.toDouble().clamp(1, double.infinity);
+    });
+  }
+
+  Future<void> _saveState() {
+    return _stateRepo.write('taxation_ir', {
+      'netImposable': _netImposable,
+      'nbrParts': _nbrParts,
+    });
+  }
+
+  Future<void> _resetState() async {
+    await _stateRepo.delete('taxation_ir');
+    if (!mounted) return;
+    setState(() {
+      _netImposable = 150000;
+      _nbrParts = 1;
+    });
+  }
 
   static const _limits = [11294.0, 28797.0, 82341.0, 177106.0];
   static const _rates = [0.0, 11.0, 30.0, 41.0, 45.0];
@@ -509,7 +654,10 @@ class _IRTabState extends State<_IRTab> {
             suffix: '€',
             value: _netImposable,
             step: 5000,
-            onChanged: (v) => setState(() => _netImposable = v),
+            onChanged: (v) {
+              setState(() => _netImposable = v);
+              _saveState();
+            },
           ),
           const SizedBox(height: 16),
           _NumberField(
@@ -518,7 +666,16 @@ class _IRTabState extends State<_IRTab> {
             value: _nbrParts,
             step: 0.5,
             decimals: 1,
-            onChanged: (v) => setState(() => _nbrParts = v < 1 ? 1 : v),
+            onChanged: (v) {
+              setState(() => _nbrParts = v < 1 ? 1 : v);
+              _saveState();
+            },
+          ),
+          const SizedBox(height: 8),
+          OutlineButton(
+            onPressed: _resetState,
+            leading: const Icon(LucideIcons.refreshCw),
+            child: const shadcn.Text('Réinitialiser les paramètres'),
           ),
         ],
       ),
