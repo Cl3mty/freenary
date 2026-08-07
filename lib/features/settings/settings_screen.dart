@@ -132,12 +132,30 @@ class _VaultCard extends StatefulWidget {
 class _VaultCardState extends State<_VaultCard> {
   bool _loading = false;
   String? _error;
+  double _progress = 0;
+  int _copiedCount = 0;
+  int _totalCount = 0;
 
   Future<void> _changeFolder() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+      _progress = 0;
+      _copiedCount = 0;
+      _totalCount = 0;
+    });
     try {
       final path = await widget.vaultFolderService.pickAndCreateVaultFolder(
         dialogTitle: 'Choisis le nouvel emplacement des données Freenary',
+        currentVaultPath: widget.currentVaultPath,
+        onMigrationProgress: (copied, total) {
+          if (!mounted) return;
+          setState(() {
+            _copiedCount = copied;
+            _totalCount = total;
+            _progress = total > 0 ? (copied / total * 100) : 100;
+          });
+        },
       );
       if (path != null) {
         widget.onVaultChanged(path);
@@ -166,8 +184,18 @@ class _VaultCardState extends State<_VaultCard> {
             OutlineButton(
               onPressed: _loading ? null : _changeFolder,
               leading: const Icon(LucideIcons.folderOpen),
-              child: Text(_loading ? 'Changement...' : "Modifier l'emplacement"),
+              child: Text(_loading ? 'Migration en cours...' : "Modifier l'emplacement"),
             ),
+            if (_loading && _totalCount > 0) ...[
+              const SizedBox(height: 16),
+              Progress(
+                progress: _progress.clamp(0, 100),
+                min: 0,
+                max: 100,
+              ),
+              const SizedBox(height: 6),
+              Text('$_copiedCount / $_totalCount fichiers copiés').muted().small(),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.destructive)),
