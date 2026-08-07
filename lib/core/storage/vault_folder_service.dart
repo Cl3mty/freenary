@@ -30,10 +30,15 @@ class VaultFolderService {
   }
 
   /// Sélectionne un nouveau dossier de données.
-  /// - Si ce dossier contient déjà `.freenary`, on le charge tel quel.
-  /// - Sinon, si [currentVaultPath] est fourni, on migre (copie) les données
-  ///   existantes vers le nouvel emplacement, en rapportant la progression
-  ///   via [onMigrationProgress] (fichiers copiés / total).
+  ///
+  /// - Le dialogue demande normalement le dossier **parent** où sera créé
+  ///   `.freenary`.
+  /// - Protection : si l'utilisateur sélectionne directement un dossier déjà
+  ///   nommé `.freenary` (erreur de manipulation fréquente), on l'utilise
+  ///   tel quel comme vault au lieu de créer `.freenary/.freenary` dedans.
+  /// - Si le vault résultant existe déjà, on le charge tel quel (aucune
+  ///   copie). Sinon, si [currentVaultPath] est fourni, on migre les
+  ///   données existantes vers le nouvel emplacement.
   Future<String?> pickAndCreateVaultFolder({
     String? dialogTitle,
     String? currentVaultPath,
@@ -42,8 +47,12 @@ class VaultFolderService {
     final result = await FilePicker.getDirectoryPath(dialogTitle: dialogTitle);
     if (result == null) return null;
 
+    // Protection contre la sélection directe d'un dossier .freenary existant :
+    // on l'utilise tel quel plutôt que de créer .freenary/.freenary dedans.
+    final selectedIsAlreadyVault = p.basename(result) == '.freenary';
+    final vaultDir = selectedIsAlreadyVault ? Directory(result) : Directory(p.join(result, '.freenary'));
+
     final prefs = await SharedPreferences.getInstance();
-    final vaultDir = Directory(p.join(result, '.freenary'));
     final alreadyExists = await vaultDir.exists();
 
     if (!alreadyExists) {
@@ -71,8 +80,13 @@ class VaultFolderService {
         }
       }
     }
+    // Si alreadyExists == true (y compris via la protection ci-dessus) :
+    // on ne touche à rien, on charge tel quel.
 
     if (Platform.isMacOS) {
+      // Le bookmark de sécurité doit toujours porter sur le dossier
+      // sélectionné par l'utilisateur (result), pas sur vaultDir, pour que
+      // l'accès sandbox reste valide même dans le cas "déjà .freenary".
       final bookmarkData = await _channel.invokeMethod<String>('createBookmark', result);
       if (bookmarkData == null) return null;
       await prefs.setString(_bookmarkKey, bookmarkData);
@@ -88,7 +102,7 @@ class VaultFolderService {
     await for (final entity in dir.list(recursive: true, followLinks: false)) {
       if (entity is File) count++;
     }
-    return count == 0 ? 1 : count; // évite une division par zéro si dossier vide
+    return count == 0 ? 1 : count;
   }
 
   Future<List<String>> _copyDirectoryContents(
@@ -110,7 +124,7 @@ class VaultFolderService {
         }
       } catch (e) {
         errors.add('${entity.path} : $e');
-        onFileCopied(); // on avance quand même la barre pour ne pas la bloquer
+        onFileCopied();
       }
     }
     return errors;
