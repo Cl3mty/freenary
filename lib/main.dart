@@ -196,6 +196,8 @@ class _FreenaryAppState extends State<FreenaryApp> {
             key: ValueKey(_profileController!.activeDataPath),
             vaultPath: _profileController!.activeDataPath,
           ),
+          'simulation_transmission': (_) => const Center(child: Text('Transmission')),
+          'assistant': (_) => const Center(child: Text('Assistant')),
           'account_management': (_) => AccountManagementScreen(profileController: _profileController!),
           'settings': (_) => SettingsScreen(
                 vaultFolderService: _vaultFolderService,

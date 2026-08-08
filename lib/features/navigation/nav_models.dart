@@ -44,7 +44,7 @@ const patrimoineGroup = NavGroup(
       icon: LucideIcons.circleMinus,
       children: [
         NavItem(key: 'passifs_emprunts', label: 'Emprunts', icon: LucideIcons.handCoins),
-        NavItem(key: 'passifs_prets_immobiliers', label: 'Prêts immobiliers', icon: LucideIcons.house),
+        NavItem(key: 'passifs_prets_immobiliers', label: 'Crédits immobiliers', icon: LucideIcons.house),
       ],
     ),
   ],
@@ -68,10 +68,12 @@ const outilsGroup = NavGroup(
       label: 'Simulation',
       icon: LucideIcons.cpu,
       children: [
-        NavItem(key: 'simulation_taxation', label: 'Taxation', icon: LucideIcons.flame),
         NavItem(key: 'simulation_patrimoine', label: 'Patrimoine', icon: LucideIcons.trendingUp),
         NavItem(key: 'simulation_pret', label: 'Prêt', icon: LucideIcons.handCoins),
+        NavItem(key: 'simulation_taxation', label: 'Fiscalité', icon: LucideIcons.flame),
+        NavItem(key: 'simulation_transmission', label: 'Transmission', icon: LucideIcons.users),
       ],
     ),
+    NavItem(key: 'assistant', label: 'Assistant', icon: LucideIcons.bot),
   ],
 );

@@ -60,15 +60,15 @@ class _TaxationScreenState extends State<TaxationSimulationScreen> {
                   _saveState();
                 },
                 children: const [
-                  TabItem(child: shadcn.Text('IFI')),
                   TabItem(child: shadcn.Text('Impôt sur le revenu')),
+                  TabItem(child: shadcn.Text('IFI')),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _tabIndex == 0 ? _IFITab(vaultPath: widget.vaultPath) : _IRTab(vaultPath: widget.vaultPath),
+            child: _tabIndex == 0 ? _IRTab(vaultPath: widget.vaultPath) : _IFITab(vaultPath: widget.vaultPath),
           ),
         ],
       ),
